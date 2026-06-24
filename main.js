@@ -32,6 +32,20 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 
+let autoRotateCamera = true;
+const AUTO_ROTATE_SPEED = 0.0012;
+const ZOOM_IN_SCALE = 0.82;
+const ZOOM_OUT_SCALE = 1.22;
+const INITIAL_ZOOM_LEVELS = 0.45;
+
+function stopAutoRotate() {
+  autoRotateCamera = false;
+}
+
+renderer.domElement.addEventListener('pointerdown', stopAutoRotate);
+renderer.domElement.addEventListener('wheel', stopAutoRotate, { passive: true });
+renderer.domElement.addEventListener('touchstart', stopAutoRotate, { passive: true });
+
 // lighting
 scene.add(new THREE.HemisphereLight(0xffffff, 0x444448, 1.1));
 const sun = new THREE.DirectionalLight(0xfff4e6, 1.6);
@@ -149,7 +163,7 @@ function loadStage(idx) {
 
     if (firstLoad) {
       modelBounds.setFromObject(root);
-      frameView('iso');
+      frameView('iso', true);
       firstLoad = false;
     }
     buildLayerPanel();
@@ -175,7 +189,8 @@ fetch('models/stages.json?v=' + Date.now())
       () => loadStage(Math.max(0, stageIndex - 1)));
     document.getElementById('nextStage').addEventListener('click',
       () => loadStage(Math.min(stagesList.length - 1, stageIndex + 1)));
-    loadStage(stagesList.length - 1);  // start on final (Slab) stage
+    const initialStage = stagesList.findIndex(s => s.id === 'ngl');
+    loadStage(initialStage >= 0 ? initialStage : 0);  // start on 00 - NGL
   })
   .catch(e => { loadingEl.textContent = 'Failed to load manifest: ' + e; });
 
@@ -223,7 +238,8 @@ function applySoilOpacity() {
 slider.addEventListener('input', applySoilOpacity);
 
 // ---- camera framing ----
-function frameView(kind) {
+function frameView(kind, keepAutoRotate = false) {
+  if (!keepAutoRotate) stopAutoRotate();
   if (modelBounds.isEmpty()) return;
   const c = modelBounds.getCenter(new THREE.Vector3());
   const size = modelBounds.getSize(new THREE.Vector3());
@@ -236,6 +252,11 @@ function frameView(kind) {
     side:  [c.x + d,       c.y + d * 0.2, c.z],
   }[kind] || [c.x + d, c.y + d, c.z + d];
   camera.position.set(...pos);
+  if (keepAutoRotate && kind === 'iso') {
+    camera.position.sub(c).applyAxisAngle(new THREE.Vector3(0, 1, 0), -Math.PI).add(c);
+    const offset = camera.position.clone().sub(c).multiplyScalar(ZOOM_IN_SCALE ** INITIAL_ZOOM_LEVELS);
+    camera.position.copy(c).add(offset);
+  }
   controls.target.copy(c);
   controls.update();
 }
@@ -243,6 +264,20 @@ function frameView(kind) {
 document.querySelectorAll('[data-view]').forEach(b =>
   b.addEventListener('click', () => frameView(b.dataset.view)));
 document.getElementById('resetBtn').addEventListener('click', () => frameView('iso'));
+
+function zoomCamera(scale) {
+  stopAutoRotate();
+  const offset = camera.position.clone().sub(controls.target);
+  const currentDistance = offset.length();
+  if (currentDistance === 0) return;
+
+  const nextDistance = THREE.MathUtils.clamp(currentDistance * scale, 4, 600);
+  camera.position.copy(controls.target).add(offset.setLength(nextDistance));
+  controls.update();
+}
+
+document.getElementById('zoomInBtn').addEventListener('click', () => zoomCamera(ZOOM_IN_SCALE));
+document.getElementById('zoomOutBtn').addEventListener('click', () => zoomCamera(ZOOM_OUT_SCALE));
 
 // ---- resize + render loop ----
 function resize() {
@@ -256,6 +291,9 @@ resize();
 
 function animate() {
   requestAnimationFrame(animate);
+  if (autoRotateCamera && !modelBounds.isEmpty()) {
+    camera.position.sub(controls.target).applyAxisAngle(new THREE.Vector3(0, 1, 0), AUTO_ROTATE_SPEED).add(controls.target);
+  }
   controls.update();
   renderer.render(scene, camera);
 }

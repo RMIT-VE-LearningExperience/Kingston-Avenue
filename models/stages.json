@@ -1,10 +1,10 @@
 [
-  { "id": "ngl",           "label": "00 — NGL (Ground Level)", "file": "models/ngl.glb",           "meshes": 29,  "mb": 0.4,  "excavator": { "pos": [-7.005, 0.497, -12.585], "quat": [0.0, 0.0092, 0.0, 1.0] } },
-  { "id": "cb3_spw6",      "label": "01 — CB3 / SPW6",         "file": "models/cb3_spw6.glb",      "meshes": 29,  "mb": 0.4,  "excavator": { "pos": [-7.005, 0.497, -12.585], "quat": [0.0, 0.0092, 0.0, 1.0] } },
+  { "id": "ngl",           "label": "00 — NGL (Ground Level)", "file": "models/ngl.glb",           "meshes": 29,  "mb": 0.4,  "excavator": { "pos": [10.0, 7.22, -10.0], "quat": [0.0, 0.0092, 0.0, 1.0] } },
+  { "id": "cb3_spw6",      "label": "01 — CB3 / SPW6",         "file": "models/cb3_spw6.glb",      "meshes": 29,  "mb": 0.4,  "excavator": { "pos": [10.0, 7.22, -10.0], "quat": [0.0, 0.0092, 0.0, 1.0] } },
   { "id": "cb1_spw5_rtw1", "label": "02 — CB1 / SPW5 + RTW1",  "file": "models/cb1_spw5_rtw1.glb", "meshes": 53,  "mb": 0.57, "excavator": { "pos": [-5.196, 2.481, -6.081], "quat": [0.0, 0.9458, 0.0, 0.3248] } },
   { "id": "spw1",          "label": "03 — SPW1",               "file": "models/spw1.glb",          "meshes": 75,  "mb": 0.71, "excavator": { "pos": [-5.196, 2.481, -6.081], "quat": [0.0, 0.9458, 0.0, 0.3248] } },
-  { "id": "cb1_spw2_3",    "label": "04 — CB1 / SPW 2+3",      "file": "models/cb1_spw2_3.glb",    "meshes": 162, "mb": 1.58, "excavator": { "pos": [14.427, 8.658, -7.941], "quat": [-0.0798, 0.5247, 0.1275, 0.8379] } },
-  { "id": "cb2_spw4",      "label": "05 — CB2 / SPW4",         "file": "models/cb2_spw4.glb",      "meshes": 205, "mb": 1.62, "excavator": { "pos": [14.427, 8.658, -7.941], "quat": [-0.0798, 0.5247, 0.1275, 0.8379] } },
+  { "id": "cb1_spw2_3",    "label": "04 — CB1 / SPW 2+3",      "file": "models/cb1_spw2_3.glb",    "meshes": 162, "mb": 1.58, "excavator": { "pos": [12.0, 7.96, -8.0], "quat": [-0.0798, 0.5247, 0.1275, 0.8379] } },
+  { "id": "cb2_spw4",      "label": "05 — CB2 / SPW4",         "file": "models/cb2_spw4.glb",      "meshes": 205, "mb": 1.62, "excavator": null },
   { "id": "shotcrete",     "label": "06 — Shotcrete",          "file": "models/shotcrete.glb",     "meshes": 214, "mb": 1.65, "excavator": null },
   { "id": "slab",          "label": "07 — Slab",               "file": "models/slab.glb",          "meshes": 214, "mb": 1.66, "excavator": null }
 ]
