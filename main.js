@@ -65,14 +65,15 @@ const EXCAVATOR_FILE = 'models/excavator.glb';
 const overlayRoots = {};   // file -> gltf scene
 const overlayOn = {};      // file -> user wants it on
 
-// Position/show the excavator for the current stage.
-// stage.excavator = [x,y,z] offset, or null (stage has no excavator).
+// Position/orient/show the excavator for the current stage.
+// stage.excavator = { pos:[x,y,z], quat:[x,y,z,w] }, or null (stage has no excavator).
 function updateExcavatorForStage() {
   const root = overlayRoots[EXCAVATOR_FILE];
   if (!root) return;
-  const off = stagesList[stageIndex]?.excavator;
-  if (off) {
-    root.position.set(off[0], off[1], off[2]);
+  const x = stagesList[stageIndex]?.excavator;
+  if (x && x.pos) {
+    root.position.set(x.pos[0], x.pos[1], x.pos[2]);
+    if (x.quat) root.quaternion.set(x.quat[0], x.quat[1], x.quat[2], x.quat[3]);
     root.visible = !!overlayOn[EXCAVATOR_FILE];
   } else {
     root.visible = false;   // this stage has no excavator
