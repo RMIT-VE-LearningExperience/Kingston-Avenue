@@ -14,7 +14,7 @@
 html, body { height: 100%; font-family: -apple-system, "Segoe UI", Roboto, sans-serif; }
 body { background: var(--bg); color: var(--text); overflow: hidden; }
 
-#app { display: flex; height: 100vh; }
+#app { display: flex; height: 100vh; height: 100svh; }
 
 #panel {
   width: 280px;
@@ -97,9 +97,123 @@ button.wide { width: 100%; margin-top: 7px; }
 .hint { font-size: 11px; color: var(--muted); line-height: 1.5; margin-top: 28px; }
 
 #viewport { flex: 1; position: relative; }
-#viewport canvas { display: block; }
+#viewport canvas { display: block; touch-action: none; }
 #loading {
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
   color: var(--muted); font-size: 14px; pointer-events: none;
+}
+
+@media (max-width: 760px) {
+  #app {
+    flex-direction: column;
+  }
+
+  #viewport {
+    order: 1;
+    flex: 1 1 auto;
+    min-height: 48svh;
+  }
+
+  #panel {
+    order: 2;
+    width: 100%;
+    max-height: 48svh;
+    padding: 14px 14px calc(14px + env(safe-area-inset-bottom));
+    border-right: 0;
+    border-top: 1px solid var(--border);
+  }
+
+  #panel h1 {
+    font-size: 15px;
+  }
+
+  .sub {
+    margin-bottom: 14px;
+  }
+
+  section {
+    margin-bottom: 16px;
+  }
+
+  select,
+  button {
+    min-height: 40px;
+    font-size: 13px;
+  }
+
+  .layer {
+    min-height: 36px;
+    padding: 8px;
+  }
+
+  .hint {
+    margin-top: 16px;
+    padding-bottom: 2px;
+  }
+}
+
+@media (max-width: 520px) {
+  #viewport {
+    min-height: 52svh;
+  }
+
+  #panel {
+    max-height: 44svh;
+  }
+
+  #panel {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 12px;
+    align-content: start;
+  }
+
+  #panel h1,
+  .sub,
+  .hint {
+    grid-column: 1 / -1;
+  }
+
+  #panel h1 {
+    margin-bottom: 2px;
+  }
+
+  section {
+    min-width: 0;
+  }
+
+  section:first-of-type,
+  section:nth-of-type(5) {
+    grid-column: 1 / -1;
+  }
+
+  section:nth-of-type(2),
+  section:nth-of-type(3),
+  section:nth-of-type(4) {
+    margin-bottom: 12px;
+  }
+
+  .layer {
+    min-height: 32px;
+    padding: 6px 8px;
+  }
+
+  .section-label {
+    margin-bottom: 6px;
+  }
+}
+
+@media (max-width: 380px) {
+  #panel {
+    grid-template-columns: 1fr;
+  }
+
+  section:first-of-type,
+  section:nth-of-type(2),
+  #panel h1,
+  .sub,
+  .hint {
+    grid-column: auto;
+  }
 }
