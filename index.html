@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kingston — Excavation Stage Viewer</title>
+  <link rel="stylesheet" href="style.css" />
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="app">
+    <aside id="panel">
+      <h1>Kingston Excavation</h1>
+      <p class="sub">3D Stage Viewer</p>
+
+      <section>
+        <label class="section-label">Stage</label>
+        <select id="stageSelect"></select>
+        <div class="btnrow" style="margin-top:8px">
+          <button id="prevStage">‹ Prev</button>
+          <button id="nextStage">Next ›</button>
+        </div>
+      </section>
+
+      <section>
+        <label class="section-label">Layers</label>
+        <div id="layers"></div>
+      </section>
+
+      <section>
+        <label class="section-label">Overlays</label>
+        <label class="layer overlay-row" data-file="models/excavator.glb">
+          <span class="swatch" style="background:#d9b53d"></span>
+          <span class="name">Excavator</span>
+          <span class="count">123</span>
+          <span class="eye">○</span>
+          <input type="checkbox" />
+        </label>
+        <label class="layer overlay-row" data-file="models/neighbour.glb">
+          <span class="swatch" style="background:#a8503c"></span>
+          <span class="name">Neighbour + Walls</span>
+          <span class="count">8</span>
+          <span class="eye">○</span>
+          <input type="checkbox" />
+        </label>
+      </section>
+
+      <section>
+        <label class="section-label">Soil X-ray</label>
+        <input type="range" id="soilOpacity" min="0" max="100" value="100" />
+        <div class="rowval"><span>Transparent</span><span id="soilVal">100%</span></div>
+      </section>
+
+      <section>
+        <label class="section-label">Views</label>
+        <div class="btnrow">
+          <button data-view="iso">Iso</button>
+          <button data-view="top">Top</button>
+          <button data-view="front">Front</button>
+          <button data-view="side">Side</button>
+        </div>
+        <button id="resetBtn" class="wide">Reset Camera</button>
+      </section>
+
+      <p class="hint">Drag to orbit · scroll to zoom · right-drag to pan</p>
+    </aside>
+
+    <main id="viewport">
+      <div id="loading">Loading model…</div>
+    </main>
+  </div>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>
