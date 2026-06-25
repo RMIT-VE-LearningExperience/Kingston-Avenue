@@ -76,6 +76,7 @@ let currentRoot = null;   // currently loaded gltf scene
 let stagesList = [];      // manifest
 let stageIndex = 0;
 let firstLoad = true;
+let prevStageCats = new Set();   // categories present in the previously loaded stage
 const hidden = {};        // cat -> bool (persist layer visibility across stages)
 
 const loader = new GLTFLoader();
@@ -176,8 +177,12 @@ function loadStage(idx) {
       modelBounds.setFromObject(root);
       frameView('iso', true);
       firstLoad = false;
-      introReveal();   // staggered fade-in, terrain last
     }
+    // fade in only the elements newly appearing vs the previous stage
+    const curCats = new Set(Object.keys(groups).filter(id => groups[id].length));
+    const newCats = new Set([...curCats].filter(id => !prevStageCats.has(id)));
+    prevStageCats = curCats;
+    introReveal(newCats);
     buildLayerPanel();
     updateExcavatorForStage();
     loadingEl.style.display = 'none';
@@ -269,10 +274,11 @@ function buildLayerPanel() {
 }
 
 // ---- intro reveal: fade layers in sequentially, terrain last ----
-function introReveal() {
+function introReveal(onlyCats) {
   const order = ['piers','spw_1','spw_2','spw_3','spw_4','spw_5','spw_wall',
                  'retaining_wall','capping_beam','slab','shotcrete','other','soil'];
-  const present = order.filter(id => groups[id] && groups[id].length);
+  let present = order.filter(id => groups[id] && groups[id].length);
+  if (onlyCats) present = present.filter(id => onlyCats.has(id));
   const steps = present.map(id => {
     const mats = new Set();
     groups[id].forEach(m => (Array.isArray(m.material) ? m.material : [m.material])
