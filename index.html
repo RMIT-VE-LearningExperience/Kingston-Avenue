@@ -84,9 +84,12 @@
     <main id="viewport">
       <div id="loading">Loading model…</div>
       <div id="levelReadout" style="display:none">
-        <div class="gr-title">Level</div>
-        <div style="font-size:18px;font-weight:650"><span id="levelValue">0.00 m</span></div>
-        <div class="gr-json">Drag the green Y handle to raise / lower</div>
+        <div class="gr-title">Level (m)</div>
+        <div class="level-row">
+          <input type="number" id="levelInput" step="0.1" />
+          <span id="levelValue">0.00 m</span>
+        </div>
+        <div class="gr-json">Type a level or drag the green handle</div>
       </div>
       <div id="gizmoReadout" style="display:none" hidden>
         <div class="gr-title">Excavator — stage <span id="grStage"></span></div>

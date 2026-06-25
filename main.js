@@ -88,6 +88,8 @@ let levelActive = false, levelInit = false;
 function updateLevelReadout() {
   const el = document.getElementById('levelValue');
   if (el) el.textContent = levelPlane.position.y.toFixed(2) + ' m';
+  const inp = document.getElementById('levelInput');
+  if (inp && document.activeElement !== inp) inp.value = levelPlane.position.y.toFixed(2);
 }
 function sizeLevelPlane() {
   if (modelBounds.isEmpty()) return;
@@ -209,6 +211,10 @@ document.getElementById('levelToggle').addEventListener('click', () => {
   btn.classList.toggle('active', levelActive);
   btn.textContent = levelActive ? 'Hide Level Plane' : 'Show Level Plane';
   updateLevelReadout();
+});
+document.getElementById('levelInput').addEventListener('input', () => {
+  const v = parseFloat(document.getElementById('levelInput').value);
+  if (!Number.isNaN(v)) { levelPlane.position.y = v; document.getElementById('levelValue').textContent = v.toFixed(2) + ' m'; }
 });
 
 document.querySelectorAll('.overlay-row').forEach(row => {

@@ -142,6 +142,13 @@ button.active { background: var(--accent); color: #1e1f22; border-color: var(--a
   margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border);
   font-size: 10px; color: var(--muted);
 }
+#levelReadout .level-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+#levelInput {
+  width: 76px; background: var(--panel2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 5px 7px; font-size: 15px; font-weight: 650;
+}
+#levelReadout #levelValue { font-size: 12px; color: var(--muted); }
 
 #scrubber {
   position: absolute;
