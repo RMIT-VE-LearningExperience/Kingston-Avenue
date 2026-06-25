@@ -53,6 +53,11 @@
       </section>
 
       <section>
+        <label class="section-label">Level Tool</label>
+        <button id="levelToggle" class="wide">Show Level Plane</button>
+      </section>
+
+      <section>
         <label class="section-label">Soil X-ray</label>
         <input type="range" id="soilOpacity" min="0" max="100" value="100" />
         <div class="rowval"><span>Transparent</span><span id="soilVal">100%</span></div>
@@ -78,6 +83,11 @@
 
     <main id="viewport">
       <div id="loading">Loading model…</div>
+      <div id="levelReadout" style="display:none">
+        <div class="gr-title">Level</div>
+        <div style="font-size:18px;font-weight:650"><span id="levelValue">0.00 m</span></div>
+        <div class="gr-json">Drag the green Y handle to raise / lower</div>
+      </div>
       <div id="gizmoReadout" style="display:none" hidden>
         <div class="gr-title">Excavator — stage <span id="grStage"></span></div>
         <div>pos <span id="grPos"></span></div>

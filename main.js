@@ -62,6 +62,43 @@ function updateGizmoReadout() {
     `"excavator": { "pos": [${f(p.x)}, ${f(p.y)}, ${f(p.z)}], "quat": [${f(q.x)}, ${f(q.y)}, ${f(q.z)}, ${f(q.w)}] }`;
 }
 
+// ---- level reference plane (movable datum, vertical only) ----
+const levelPlane = new THREE.Mesh(
+  new THREE.PlaneGeometry(1, 1),
+  new THREE.MeshBasicMaterial({ color: 0x4a8db0, transparent: true, opacity: 0.25,
+                                side: THREE.DoubleSide, depthWrite: false })
+);
+levelPlane.rotation.x = -Math.PI / 2;          // horizontal, normal = +Y (up)
+levelPlane.visible = false;
+levelPlane.add(new THREE.LineSegments(
+  new THREE.EdgesGeometry(levelPlane.geometry),
+  new THREE.LineBasicMaterial({ color: 0x8fd0ec })
+));
+scene.add(levelPlane);
+
+const levelCtrl = new TransformControls(camera, renderer.domElement);
+levelCtrl.setMode('translate');
+levelCtrl.showX = false; levelCtrl.showZ = false;   // vertical movement only
+levelCtrl.addEventListener('dragging-changed', (e) => { controls.enabled = !e.value; });
+levelCtrl.addEventListener('objectChange', updateLevelReadout);
+levelCtrl.visible = false;
+scene.add(levelCtrl);
+
+let levelActive = false, levelInit = false;
+function updateLevelReadout() {
+  const el = document.getElementById('levelValue');
+  if (el) el.textContent = levelPlane.position.y.toFixed(2) + ' m';
+}
+function sizeLevelPlane() {
+  if (modelBounds.isEmpty()) return;
+  const size = modelBounds.getSize(new THREE.Vector3());
+  const c = modelBounds.getCenter(new THREE.Vector3());
+  const s = Math.max(size.x, size.z) * 1.3;
+  levelPlane.scale.set(s, s, 1);
+  levelPlane.position.x = c.x; levelPlane.position.z = c.z;
+  if (!levelInit) { levelPlane.position.y = Math.round(c.y); levelInit = true; }
+}
+
 let autoRotateCamera = true;
 const AUTO_ROTATE_SPEED = 0.0012;
 const ZOOM_IN_SCALE = 0.82;
@@ -159,6 +196,20 @@ document.getElementById('gizmoToggle').addEventListener('click', () => {
 document.getElementById('gizmoMove').addEventListener('click', () => setGizmoMode('translate'));
 document.getElementById('gizmoRotate').addEventListener('click', () => setGizmoMode('rotate'));
 setGizmoMode('translate');
+
+// ---- level plane toggle ----
+document.getElementById('levelToggle').addEventListener('click', () => {
+  levelActive = !levelActive;
+  if (levelActive) { autoRotateCamera = false; sizeLevelPlane(); levelCtrl.attach(levelPlane); }
+  else { levelCtrl.detach(); }
+  levelPlane.visible = levelActive;
+  levelCtrl.visible = levelActive;
+  document.getElementById('levelReadout').style.display = levelActive ? 'block' : 'none';
+  const btn = document.getElementById('levelToggle');
+  btn.classList.toggle('active', levelActive);
+  btn.textContent = levelActive ? 'Hide Level Plane' : 'Show Level Plane';
+  updateLevelReadout();
+});
 
 document.querySelectorAll('.overlay-row').forEach(row => {
   const cb = row.querySelector('input');
