@@ -3,6 +3,11 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
+// ---- eye icons (open = visible, closed = hidden) ----
+const EYE_OPEN = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
+const EYE_CLOSED = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-7-11-7a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+const eyeIcon = (on) => on ? EYE_OPEN : EYE_CLOSED;
+
 // ---- category definitions (order = panel order) ----
 const CATEGORIES = [
   { id: 'soil',           label: 'Soil / Terrain',  color: '#9c6b3f' },
@@ -105,7 +110,7 @@ document.querySelectorAll('.overlay-row').forEach(row => {
   cb.addEventListener('change', () => {
     const on = cb.checked;
     overlayOn[file] = on;
-    row.querySelector('.eye').textContent = on ? '●' : '○';
+    row.querySelector('.eye').innerHTML = eyeIcon(on);
     row.classList.toggle('off', !on);
     if (on && !overlayRoots[file]) {
       loadingEl.textContent = 'Loading overlay…';
@@ -212,18 +217,18 @@ function buildLayerPanel() {
       <span class="swatch" style="background:${c.color}"></span>
       <span class="name">${c.label}</span>
       <span class="count">${n}</span>
-      <span class="eye">●</span>
+      <span class="eye">${EYE_OPEN}</span>
       <input type="checkbox" checked />`;
     const cb = row.querySelector('input');
     cb.checked = !hidden[c.id];
     row.classList.toggle('off', !cb.checked);
-    row.querySelector('.eye').textContent = cb.checked ? '●' : '○';
+    row.querySelector('.eye').innerHTML = eyeIcon(cb.checked);
     groups[c.id].forEach(m => m.visible = cb.checked);
     cb.addEventListener('change', () => {
       hidden[c.id] = !cb.checked;
       groups[c.id].forEach(m => m.visible = cb.checked);
       row.classList.toggle('off', !cb.checked);
-      row.querySelector('.eye').textContent = cb.checked ? '●' : '○';
+      row.querySelector('.eye').innerHTML = eyeIcon(cb.checked);
     });
     host.appendChild(row);
   });

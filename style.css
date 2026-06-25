@@ -68,9 +68,12 @@ select {
 .layer .name { flex: 1; font-size: 13px; }
 .layer .count { font-size: 11px; color: var(--muted); }
 .layer .eye {
-  width: 16px; text-align: center; font-size: 13px; color: var(--muted);
+  width: 18px; height: 16px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--text);
 }
-.layer.off { opacity: 0.45; }
+.layer .eye svg { display: block; }
+.layer.off { opacity: 0.55; }
 .layer.off .eye { color: var(--muted); }
 
 input[type=range] {
