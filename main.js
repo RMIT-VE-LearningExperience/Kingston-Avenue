@@ -7,6 +7,11 @@ import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 const CATEGORIES = [
   { id: 'soil',           label: 'Soil / Terrain',  color: '#9c6b3f' },
   { id: 'piers',          label: 'Bored Piers',     color: '#7a7066' },
+  { id: 'spw_1',          label: 'SPW1 Pile Wall',  color: '#9aa6b2' },
+  { id: 'spw_2',          label: 'SPW2 Pile Wall',  color: '#8f9aa6' },
+  { id: 'spw_3',          label: 'SPW3 Pile Wall',  color: '#848e99' },
+  { id: 'spw_4',          label: 'SPW4 Pile Wall',  color: '#79828c' },
+  { id: 'spw_5',          label: 'SPW5 Pile Wall',  color: '#6e767f' },
   { id: 'spw_wall',       label: 'SPW Pile Walls',  color: '#808080' },
   { id: 'retaining_wall', label: 'Retaining Walls', color: '#8c8c8c' },
   { id: 'capping_beam',   label: 'Capping Beams',   color: '#9a9a96' },
