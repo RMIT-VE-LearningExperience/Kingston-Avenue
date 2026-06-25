@@ -197,10 +197,12 @@ const scrubTicks = document.getElementById('scrubTicks');
 
 function setupScrubber(list) {
   scrub.max = String(list.length - 1);
-  // short tick labels (the leading number of each stage label)
-  scrubTicks.innerHTML = list.map(s => {
+  const lastIdx = Math.max(1, list.length - 1);
+  // tick labels positioned at the exact thumb-center fraction (inset by half the thumb)
+  scrubTicks.innerHTML = list.map((s, i) => {
     const short = (s.label.split('—')[0] || '').trim() || s.id;
-    return `<span data-i>${short}</span>`;
+    const frac = i / lastIdx;
+    return `<span style="left:calc(var(--thumb,18px)/2 + (100% - var(--thumb,18px)) * ${frac})">${short}</span>`;
   }).join('');
   scrub.addEventListener('input', () => {
     const i = parseInt(scrub.value, 10);
@@ -219,6 +221,8 @@ function syncScrubber(idx) {
   scrub.value = String(idx);
   scrubLabel.textContent = stagesList[idx] ? stagesList[idx].label : 'Stage';
   updateScrubTicks(idx);
+  const frac = stagesList.length > 1 ? idx / (stagesList.length - 1) : 0;
+  scrub.style.setProperty('--pct', `calc(var(--thumb,18px)/2 + (100% - var(--thumb,18px)) * ${frac})`);
 }
 
 // ---- load manifest, then first stage ----
