@@ -175,6 +175,7 @@ function loadStage(idx) {
       modelBounds.setFromObject(root);
       frameView('iso', true);
       firstLoad = false;
+      introReveal();   // staggered fade-in, terrain last
     }
     buildLayerPanel();
     updateExcavatorForStage();
@@ -232,6 +233,51 @@ function buildLayerPanel() {
     });
     host.appendChild(row);
   });
+}
+
+// ---- intro reveal: fade layers in sequentially, terrain last ----
+function introReveal() {
+  const order = ['piers','spw_1','spw_2','spw_3','spw_4','spw_5','spw_wall',
+                 'retaining_wall','capping_beam','slab','shotcrete','other','soil'];
+  const present = order.filter(id => groups[id] && groups[id].length);
+  const steps = present.map(id => {
+    const mats = new Set();
+    groups[id].forEach(m => (Array.isArray(m.material) ? m.material : [m.material])
+                              .forEach(x => x && mats.add(x)));
+    const list = [...mats].map(mat => {
+      const st = { mat, transparent: mat.transparent, opacity: mat.opacity, depthWrite: mat.depthWrite };
+      mat.transparent = true; mat.opacity = 0; mat.depthWrite = false;
+      return st;
+    });
+    return { id, mats: list };
+  });
+  if (!steps.length) return;
+
+  const FADE = 650, STAGGER = 340;
+  const start = performance.now();
+  function tick(now) {
+    let done = true;
+    steps.forEach((step, i) => {
+      const p = Math.min(1, Math.max(0, (now - (start + i * STAGGER)) / FADE));
+      const ease = p * (2 - p);  // easeOutQuad
+      step.mats.forEach(s => {
+        const target = (step.id === 'soil') ? (slider.value / 100) : (s.opacity ?? 1);
+        s.mat.opacity = ease * target;
+      });
+      if (p < 1) done = false;
+    });
+    if (!done) requestAnimationFrame(tick);
+    else steps.forEach(step => step.mats.forEach(s => {
+      if (step.id === 'soil') {
+        s.mat.opacity = slider.value / 100;
+        s.mat.transparent = true;
+        s.mat.depthWrite = (slider.value / 100) > 0.98;
+      } else {
+        s.mat.opacity = s.opacity; s.mat.transparent = s.transparent; s.mat.depthWrite = s.depthWrite;
+      }
+    }));
+  }
+  requestAnimationFrame(tick);
 }
 
 // ---- soil x-ray slider ----
