@@ -102,6 +102,29 @@ button.wide { width: 100%; margin-top: 7px; }
 #viewport { flex: 1; position: relative; }
 #viewport canvas { display: block; touch-action: none; }
 
+#gizmoReadout {
+  position: absolute;
+  top: 16px; left: 16px;
+  background: rgba(34, 36, 40, 0.9);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  color: var(--text);
+  line-height: 1.7;
+  max-width: 360px;
+  z-index: 5;
+}
+#gizmoReadout .gr-title { font-weight: 650; color: var(--accent); margin-bottom: 4px; }
+#gizmoReadout .gr-json {
+  margin-top: 6px; padding-top: 6px;
+  border-top: 1px solid var(--border);
+  color: var(--muted); word-break: break-all; user-select: all;
+}
+button.active { background: var(--accent); color: #1e1f22; border-color: var(--accent); }
+
 #scrubber {
   position: absolute;
   left: 50%;

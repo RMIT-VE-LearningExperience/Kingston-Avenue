@@ -43,6 +43,15 @@
         </label>
       </section>
 
+      <section hidden>
+        <label class="section-label">Excavator Placement</label>
+        <button id="gizmoToggle" class="wide">Enable Move Gizmo</button>
+        <div class="btnrow" style="margin-top:7px">
+          <button id="gizmoMove">Move</button>
+          <button id="gizmoRotate">Rotate</button>
+        </div>
+      </section>
+
       <section>
         <label class="section-label">Soil X-ray</label>
         <input type="range" id="soilOpacity" min="0" max="100" value="100" />
@@ -69,6 +78,12 @@
 
     <main id="viewport">
       <div id="loading">Loading model…</div>
+      <div id="gizmoReadout" style="display:none" hidden>
+        <div class="gr-title">Excavator — stage <span id="grStage"></span></div>
+        <div>pos <span id="grPos"></span></div>
+        <div>quat <span id="grQuat"></span></div>
+        <div class="gr-json" id="grJson"></div>
+      </div>
       <div id="scrubber">
         <div id="scrubLabel">Stage</div>
         <input type="range" id="stageScrub" min="0" max="0" step="1" value="0" />

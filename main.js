@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { TransformControls } from 'three/addons/controls/TransformControls.js';
 
 // ---- eye icons (open = visible, closed = hidden) ----
 const EYE_OPEN = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
@@ -41,6 +42,25 @@ viewport.appendChild(renderer.domElement);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
+
+// ---- transform gizmo for manually placing the excavator ----
+const gizmo = new TransformControls(camera, renderer.domElement);
+gizmo.addEventListener('dragging-changed', (e) => { controls.enabled = !e.value; });
+gizmo.addEventListener('objectChange', () => updateGizmoReadout());
+scene.add(gizmo);
+
+function updateGizmoReadout() {
+  const box = document.getElementById('gizmoReadout');
+  if (!box || !gizmo.object) return;
+  const p = gizmo.object.position, q = gizmo.object.quaternion;
+  const f = (n) => n.toFixed(3);
+  const stageId = stagesList[stageIndex] ? stagesList[stageIndex].id : '?';
+  box.querySelector('#grPos').textContent = `[${f(p.x)}, ${f(p.y)}, ${f(p.z)}]`;
+  box.querySelector('#grQuat').textContent = `[${f(q.x)}, ${f(q.y)}, ${f(q.z)}, ${f(q.w)}]`;
+  box.querySelector('#grStage').textContent = stageId;
+  box.querySelector('#grJson').textContent =
+    `"excavator": { "pos": [${f(p.x)}, ${f(p.y)}, ${f(p.z)}], "quat": [${f(q.x)}, ${f(q.y)}, ${f(q.z)}, ${f(q.w)}] }`;
+}
 
 let autoRotateCamera = true;
 const AUTO_ROTATE_SPEED = 0.0012;
@@ -103,7 +123,42 @@ function updateExcavatorForStage() {
   } else {
     root.visible = false;   // this stage has no excavator
   }
+  refreshGizmoAttachment();
 }
+
+// ---- excavator move gizmo wiring ----
+let gizmoActive = false;
+function refreshGizmoAttachment() {
+  const root = overlayRoots[EXCAVATOR_FILE];
+  const readout = document.getElementById('gizmoReadout');
+  if (gizmoActive && root && root.visible) {
+    gizmo.attach(root); gizmo.visible = true;
+    readout.style.display = 'block'; updateGizmoReadout();
+  } else {
+    gizmo.detach(); gizmo.visible = false;
+    readout.style.display = 'none';
+  }
+}
+function setGizmoMode(mode) {
+  gizmo.setMode(mode);
+  document.getElementById('gizmoMove').classList.toggle('active', mode === 'translate');
+  document.getElementById('gizmoRotate').classList.toggle('active', mode === 'rotate');
+}
+document.getElementById('gizmoToggle').addEventListener('click', () => {
+  gizmoActive = !gizmoActive;
+  if (gizmoActive) autoRotateCamera = false;
+  document.getElementById('gizmoToggle').classList.toggle('active', gizmoActive);
+  document.getElementById('gizmoToggle').textContent = gizmoActive ? 'Disable Move Gizmo' : 'Enable Move Gizmo';
+  // make sure the excavator is loaded + visible
+  if (gizmoActive) {
+    const cb = document.querySelector('.overlay-row[data-file="' + EXCAVATOR_FILE + '"] input');
+    if (cb && !cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change')); }
+  }
+  refreshGizmoAttachment();
+});
+document.getElementById('gizmoMove').addEventListener('click', () => setGizmoMode('translate'));
+document.getElementById('gizmoRotate').addEventListener('click', () => setGizmoMode('rotate'));
+setGizmoMode('translate');
 
 document.querySelectorAll('.overlay-row').forEach(row => {
   const cb = row.querySelector('input');
