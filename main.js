@@ -144,6 +144,7 @@ function loadStage(idx) {
   if (!stage) return;
   stageIndex = idx;
   document.getElementById('stageSelect').value = stage.id;
+  syncScrubber(idx);
   loadingEl.textContent = 'Loading ' + stage.label + '…';
   loadingEl.style.display = 'flex';
 
@@ -185,6 +186,37 @@ function loadStage(idx) {
   });
 }
 
+// ---- stage scrubber (timeline slider at bottom of viewport) ----
+const scrub = document.getElementById('stageScrub');
+const scrubLabel = document.getElementById('scrubLabel');
+const scrubTicks = document.getElementById('scrubTicks');
+
+function setupScrubber(list) {
+  scrub.max = String(list.length - 1);
+  // short tick labels (the leading number of each stage label)
+  scrubTicks.innerHTML = list.map(s => {
+    const short = (s.label.split('—')[0] || '').trim() || s.id;
+    return `<span data-i>${short}</span>`;
+  }).join('');
+  scrub.addEventListener('input', () => {
+    const i = parseInt(scrub.value, 10);
+    scrubLabel.textContent = stagesList[i] ? stagesList[i].label : 'Stage';
+    updateScrubTicks(i);
+    if (i !== stageIndex) loadStage(i);
+  });
+}
+
+function updateScrubTicks(i) {
+  [...scrubTicks.children].forEach((el, k) => el.classList.toggle('active', k === i));
+}
+
+function syncScrubber(idx) {
+  if (!scrub) return;
+  scrub.value = String(idx);
+  scrubLabel.textContent = stagesList[idx] ? stagesList[idx].label : 'Stage';
+  updateScrubTicks(idx);
+}
+
 // ---- load manifest, then first stage ----
 fetch('models/stages.json?v=' + Date.now())
   .then(r => r.json())
@@ -200,6 +232,7 @@ fetch('models/stages.json?v=' + Date.now())
       () => loadStage(Math.max(0, stageIndex - 1)));
     document.getElementById('nextStage').addEventListener('click',
       () => loadStage(Math.min(stagesList.length - 1, stageIndex + 1)));
+    setupScrubber(list);
     const initialStage = stagesList.findIndex(s => s.id === 'ngl');
     loadStage(initialStage >= 0 ? initialStage : 0);  // start on 00 - NGL
   })
