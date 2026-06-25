@@ -379,46 +379,62 @@ function buildLayerPanel() {
 }
 
 // ---- intro reveal: fade layers in sequentially, terrain last ----
+// Robust to shared materials (e.g. all SPW walls share one material) and to
+// fast scrubbing: every load first forces all current materials fully opaque,
+// then fades ONLY the newly-appearing categories. Each material is faded at
+// most once (global dedupe) so a shared material can never be left transparent.
+const introTokenRef = { v: 0 };
+function setMatOpaque(mat) {
+  if (soilMats.includes(mat)) return;   // soil handled by the x-ray slider
+  mat.opacity = 1; mat.transparent = false; mat.depthWrite = true;
+}
+function eachMat(mesh, fn) {
+  (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).forEach(m => m && fn(m));
+}
+
 function introReveal(onlyCats) {
+  const token = ++introTokenRef.v;   // cancels any in-flight fade
+
+  // 1. baseline: everything in the current stage is fully visible
+  Object.values(groups).forEach(arr => arr.forEach(m => eachMat(m, setMatOpaque)));
+  applySoilOpacity();
+
+  // 2. collect the materials to fade, per category, deduped globally
   const order = ['piers','spw_1','spw_2','spw_3','spw_4','spw_5','spw_wall',
                  'retaining_wall','capping_beam','slab','shotcrete','other','soil'];
   let present = order.filter(id => groups[id] && groups[id].length);
   if (onlyCats) present = present.filter(id => onlyCats.has(id));
-  const steps = present.map(id => {
-    const mats = new Set();
-    groups[id].forEach(m => (Array.isArray(m.material) ? m.material : [m.material])
-                              .forEach(x => x && mats.add(x)));
-    const list = [...mats].map(mat => {
-      const st = { mat, transparent: mat.transparent, opacity: mat.opacity, depthWrite: mat.depthWrite };
-      mat.transparent = true; mat.opacity = 0; mat.depthWrite = false;
-      return st;
-    });
-    return { id, mats: list };
+  const seen = new Set();
+  const steps = [];
+  present.forEach(id => {
+    const mats = [];
+    groups[id].forEach(m => eachMat(m, mat => {
+      if (!seen.has(mat)) { seen.add(mat); mats.push(mat); }
+    }));
+    if (mats.length) {
+      mats.forEach(mat => { mat.transparent = true; mat.opacity = 0; mat.depthWrite = false; });
+      steps.push({ id, mats });
+    }
   });
   if (!steps.length) return;
 
   const FADE = 650, STAGGER = 340;
   const start = performance.now();
   function tick(now) {
+    if (token !== introTokenRef.v) return;   // superseded by a newer load
     let done = true;
     steps.forEach((step, i) => {
       const p = Math.min(1, Math.max(0, (now - (start + i * STAGGER)) / FADE));
       const ease = p * (2 - p);  // easeOutQuad
-      step.mats.forEach(s => {
-        const target = (step.id === 'soil') ? (slider.value / 100) : (s.opacity ?? 1);
-        s.mat.opacity = ease * target;
-      });
+      const target = (step.id === 'soil') ? (slider.value / 100) : 1;
+      step.mats.forEach(mat => { mat.opacity = ease * target; });
       if (p < 1) done = false;
     });
-    if (!done) requestAnimationFrame(tick);
-    else steps.forEach(step => step.mats.forEach(s => {
-      if (step.id === 'soil') {
-        s.mat.opacity = slider.value / 100;
-        s.mat.transparent = true;
-        s.mat.depthWrite = (slider.value / 100) > 0.98;
-      } else {
-        s.mat.opacity = s.opacity; s.mat.transparent = s.transparent; s.mat.depthWrite = s.depthWrite;
-      }
+    if (!done) { requestAnimationFrame(tick); return; }
+    // settle to final state
+    steps.forEach(step => step.mats.forEach(mat => {
+      if (step.id === 'soil') { applySoilOpacity(); }
+      else { mat.opacity = 1; mat.transparent = false; mat.depthWrite = true; }
     }));
   }
   requestAnimationFrame(tick);
