@@ -144,7 +144,6 @@ function loadStage(idx) {
   const stage = stagesList[idx];
   if (!stage) return;
   stageIndex = idx;
-  document.getElementById('stageSelect').value = stage.id;
   syncScrubber(idx);
   loadingEl.textContent = 'Loading ' + stage.label + '…';
   loadingEl.style.display = 'flex';
@@ -227,16 +226,6 @@ fetch('models/stages.json?v=' + Date.now())
   .then(r => r.json())
   .then(list => {
     stagesList = list;
-    const sel = document.getElementById('stageSelect');
-    sel.innerHTML = list.map(s => `<option value="${s.id}">${s.label}</option>`).join('');
-    sel.addEventListener('change', () => {
-      const i = stagesList.findIndex(s => s.id === sel.value);
-      if (i >= 0) loadStage(i);
-    });
-    document.getElementById('prevStage').addEventListener('click',
-      () => loadStage(Math.max(0, stageIndex - 1)));
-    document.getElementById('nextStage').addEventListener('click',
-      () => loadStage(Math.min(stagesList.length - 1, stageIndex + 1)));
     setupScrubber(list);
     const initialStage = stagesList.findIndex(s => s.id === 'ngl');
     loadStage(initialStage >= 0 ? initialStage : 0);  // start on 00 - NGL
