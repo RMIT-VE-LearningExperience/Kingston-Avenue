@@ -138,6 +138,10 @@ let firstLoad = true;
 let prevStageCats = new Set();   // categories present in the previously loaded stage
 const hidden = {};        // cat -> bool (persist layer visibility across stages)
 
+// bump ASSET_V whenever model .glb files change, so browsers fetch the new ones
+const ASSET_V = '9';
+const bust = (url) => url + (url.includes('?') ? '&' : '?') + 'v=' + ASSET_V;
+
 const loader = new GLTFLoader();
 const draco = new DRACOLoader();
 draco.setDecoderPath('https://unpkg.com/three@0.160.0/examples/jsm/libs/draco/');
@@ -228,7 +232,7 @@ document.querySelectorAll('.overlay-row').forEach(row => {
     if (on && !overlayRoots[file]) {
       loadingEl.textContent = 'Loading overlay…';
       loadingEl.style.display = 'flex';
-      loader.load(file, (g) => {
+      loader.load(bust(file), (g) => {
         overlayRoots[file] = g.scene;
         scene.add(g.scene);
         loadingEl.style.display = 'none';
@@ -260,7 +264,7 @@ function loadStage(idx) {
   loadingEl.textContent = 'Loading ' + stage.label + '…';
   loadingEl.style.display = 'flex';
 
-  loader.load(stage.file, (gltf) => {
+  loader.load(bust(stage.file), (gltf) => {
     if (currentRoot) disposeRoot(currentRoot);
     groups = {}; soilMats = [];
     CATEGORIES.forEach(c => groups[c.id] = []);
