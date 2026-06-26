@@ -39,6 +39,8 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.autoClear = false;
+renderer.xr.enabled = true;
+renderer.xr.setReferenceSpaceType('local-floor');
 viewport.appendChild(renderer.domElement);
 
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -682,7 +684,7 @@ const tourSteps = [
   {
     target: '#resetBtn',
     title: 'View controls',
-    body: 'Use zoom, reset, measure, and level shortcuts from the floating toolbar beside the orientation cube.'
+    body: 'Use zoom, reset, measure, level, and VR shortcuts from the floating toolbar beside the orientation cube.'
   },
   {
     target: '#measureToggle',
@@ -1173,6 +1175,62 @@ function zoomCamera(scale) {
 document.getElementById('zoomInBtn').addEventListener('click', () => zoomCamera(ZOOM_IN_SCALE));
 document.getElementById('zoomOutBtn').addEventListener('click', () => zoomCamera(ZOOM_OUT_SCALE));
 
+// ---- WebXR VR session ----
+const vrToggle = document.getElementById('vrToggle');
+let xrSession = null;
+
+function updateVrButton(active) {
+  vrToggle.classList.toggle('active', active);
+  vrToggle.setAttribute('aria-label', active ? 'Exit VR' : 'Enter VR');
+  vrToggle.title = active ? 'Exit VR' : 'Enter VR';
+}
+
+async function setupVrSupport() {
+  if (!('xr' in navigator)) {
+    vrToggle.disabled = true;
+    vrToggle.title = 'VR requires a WebXR browser on a headset';
+    return;
+  }
+
+  try {
+    const supported = await navigator.xr.isSessionSupported('immersive-vr');
+    vrToggle.disabled = !supported;
+    vrToggle.title = supported ? 'Enter VR' : 'VR is not available on this device';
+  } catch {
+    vrToggle.disabled = true;
+    vrToggle.title = 'VR support could not be checked';
+  }
+}
+
+async function startVrSession() {
+  if (!navigator.xr || vrToggle.disabled) return;
+  stopAutoRotate();
+  clearMeasurement(false);
+  try {
+    const session = await navigator.xr.requestSession('immersive-vr', {
+      optionalFeatures: ['local-floor', 'bounded-floor']
+    });
+    xrSession = session;
+    updateVrButton(true);
+    controls.enabled = false;
+    session.addEventListener('end', () => {
+      xrSession = null;
+      controls.enabled = true;
+      updateVrButton(false);
+    }, { once: true });
+    await renderer.xr.setSession(session);
+  } catch (err) {
+    console.warn('Unable to start VR session', err);
+    updateVrButton(false);
+  }
+}
+
+vrToggle.addEventListener('click', () => {
+  if (xrSession) xrSession.end();
+  else startVrSession();
+});
+setupVrSupport();
+
 // ---- resize + render loop ----
 function resize() {
   const w = viewport.clientWidth, h = viewport.clientHeight;
@@ -1184,13 +1242,19 @@ window.addEventListener('resize', resize);
 resize();
 
 function animate() {
-  requestAnimationFrame(animate);
-  if (autoRotateCamera && !modelBounds.isEmpty()) {
+  const inVr = renderer.xr.isPresenting;
+  if (autoRotateCamera && !inVr && !modelBounds.isEmpty()) {
     camera.position.sub(controls.target).applyAxisAngle(new THREE.Vector3(0, 1, 0), AUTO_ROTATE_SPEED).add(controls.target);
   }
   controls.update();
   updateMeasureLabelPosition();
   renderer.setScissorTest(false);
+
+  if (inVr) {
+    renderer.render(scene, camera);
+    return;
+  }
+
   renderer.setViewport(0, 0, viewport.clientWidth, viewport.clientHeight);
   renderer.clear();
   renderer.render(scene, camera);
@@ -1204,4 +1268,4 @@ function animate() {
   renderer.render(viewGizmoScene, viewGizmoCamera);
   renderer.setScissorTest(false);
 }
-animate();
+renderer.setAnimationLoop(animate);
