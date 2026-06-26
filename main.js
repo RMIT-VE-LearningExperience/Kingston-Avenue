@@ -33,6 +33,8 @@ const CATEGORIES = [
 const viewport = document.getElementById('viewport');
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x1e1f22);
+const vrWorld = new THREE.Group();
+scene.add(vrWorld);
 
 const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 5000);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -899,7 +901,7 @@ document.querySelectorAll('.overlay-row').forEach(row => {
       loadingEl.style.display = 'flex';
       loader.load(bust(file), (g) => {
         overlayRoots[file] = g.scene;
-        scene.add(g.scene);
+        vrWorld.add(g.scene);
         loadingEl.style.display = 'none';
         if (file === EXCAVATOR_FILE) updateExcavatorForStage();
       }, undefined, (err) => { loadingEl.textContent = 'Overlay failed: ' + err; });
@@ -918,7 +920,7 @@ function disposeRoot(root) {
       mats.forEach(m => m?.dispose());
     }
   });
-  scene.remove(root);
+  root.parent?.remove(root);
 }
 
 function loadStage(idx) {
@@ -950,7 +952,7 @@ function loadStage(idx) {
         mats.forEach(m => { m.transparent = true; soilMats.push(m); });
       }
     });
-    scene.add(root);
+    vrWorld.add(root);
     currentRoot = root;
     clearMeasurement();
 
@@ -1178,11 +1180,84 @@ document.getElementById('zoomOutBtn').addEventListener('click', () => zoomCamera
 // ---- WebXR VR session ----
 const vrToggle = document.getElementById('vrToggle');
 let xrSession = null;
+let vrYaw = 0;
+let vrScale = 0.08;
+const VR_MIN_SCALE = 0.025;
+const VR_MAX_SCALE = 0.28;
+const VR_TARGET_CENTER = new THREE.Vector3(0, 1.25, -4.2);
+const vrModelCenter = new THREE.Vector3();
+const vrRotatedCenter = new THREE.Vector3();
+const vrInputState = new Map();
 
 function updateVrButton(active) {
   vrToggle.classList.toggle('active', active);
   vrToggle.setAttribute('aria-label', active ? 'Exit VR' : 'Enter VR');
   vrToggle.title = active ? 'Exit VR' : 'Enter VR';
+}
+
+function applyVrWorldTransform() {
+  if (modelBounds.isEmpty()) return;
+  modelBounds.getCenter(vrModelCenter);
+  vrWorld.scale.setScalar(vrScale);
+  vrWorld.rotation.set(0, vrYaw, 0);
+  vrRotatedCenter.copy(vrModelCenter).multiplyScalar(vrScale).applyAxisAngle(new THREE.Vector3(0, 1, 0), vrYaw);
+  vrWorld.position.copy(VR_TARGET_CENTER).sub(vrRotatedCenter);
+}
+
+function resetVrWorldTransform() {
+  vrWorld.position.set(0, 0, 0);
+  vrWorld.rotation.set(0, 0, 0);
+  vrWorld.scale.setScalar(1);
+}
+
+function configureVrView() {
+  vrYaw = 0;
+  vrScale = 0.08;
+  applyVrWorldTransform();
+}
+
+function changeStage(delta) {
+  if (!stagesList.length) return;
+  const next = THREE.MathUtils.clamp(stageIndex + delta, 0, stagesList.length - 1);
+  if (next !== stageIndex) loadStage(next);
+}
+
+function pressedButton(gamepad) {
+  return gamepad?.buttons?.some(button => button.pressed) || false;
+}
+
+function updateVrControllerInput() {
+  if (!xrSession) return;
+
+  for (const source of xrSession.inputSources) {
+    const gamepad = source.gamepad;
+    if (!gamepad) continue;
+
+    const axes = gamepad.axes || [];
+    let x = 0;
+    let y = 0;
+    for (let i = 0; i < axes.length - 1; i += 2) {
+      const ax = Math.abs(axes[i]) > 0.12 ? axes[i] : 0;
+      const ay = Math.abs(axes[i + 1]) > 0.12 ? axes[i + 1] : 0;
+      if (Math.abs(ax) + Math.abs(ay) > Math.abs(x) + Math.abs(y)) {
+        x = ax;
+        y = ay;
+      }
+    }
+
+    if (x || y) {
+      vrYaw -= x * 0.035;
+      vrScale = THREE.MathUtils.clamp(vrScale * (1 - y * 0.035), VR_MIN_SCALE, VR_MAX_SCALE);
+      applyVrWorldTransform();
+    }
+
+    const isPressed = pressedButton(gamepad);
+    const wasPressed = vrInputState.get(source) || false;
+    if (isPressed && !wasPressed) {
+      changeStage(source.handedness === 'left' ? -1 : 1);
+    }
+    vrInputState.set(source, isPressed);
+  }
 }
 
 async function setupVrSupport() {
@@ -1206,6 +1281,7 @@ async function startVrSession() {
   if (!navigator.xr || vrToggle.disabled) return;
   stopAutoRotate();
   clearMeasurement(false);
+  configureVrView();
   try {
     const session = await navigator.xr.requestSession('immersive-vr', {
       optionalFeatures: ['local-floor', 'bounded-floor']
@@ -1215,6 +1291,8 @@ async function startVrSession() {
     controls.enabled = false;
     session.addEventListener('end', () => {
       xrSession = null;
+      vrInputState.clear();
+      resetVrWorldTransform();
       controls.enabled = true;
       updateVrButton(false);
     }, { once: true });
@@ -1246,6 +1324,7 @@ function animate() {
   if (autoRotateCamera && !inVr && !modelBounds.isEmpty()) {
     camera.position.sub(controls.target).applyAxisAngle(new THREE.Vector3(0, 1, 0), AUTO_ROTATE_SPEED).add(controls.target);
   }
+  if (inVr) updateVrControllerInput();
   controls.update();
   updateMeasureLabelPosition();
   renderer.setScissorTest(false);
