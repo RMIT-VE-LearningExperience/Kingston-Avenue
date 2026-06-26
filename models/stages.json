@@ -23,8 +23,8 @@
     "id": "cb3_spw6",
     "label": "01 \u2014 CB3 / SPW6",
     "file": "models/cb3_spw6.glb",
-    "meshes": 29,
-    "mb": 0.4,
+    "meshes": 15,
+    "mb": 0.31,
     "excavator": {
       "pos": [
         -2.191,
@@ -63,8 +63,8 @@
     "id": "spw1",
     "label": "03 \u2014 SPW1",
     "file": "models/spw1.glb",
-    "meshes": 75,
-    "mb": 0.71,
+    "meshes": 98,
+    "mb": 0.88,
     "excavator": {
       "pos": [
         -5.196,
@@ -111,7 +111,7 @@
     "id": "shotcrete",
     "label": "06 \u2014 Shotcrete",
     "file": "models/shotcrete.glb",
-    "meshes": 214,
+    "meshes": 213,
     "mb": 1.65,
     "excavator": null
   },
