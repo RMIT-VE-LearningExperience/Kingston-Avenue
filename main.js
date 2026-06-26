@@ -22,7 +22,8 @@ const CATEGORIES = [
   { id: 'retaining_wall', label: 'RTW1(O) Retaining Walls',        color: '#8c8c8c' },
   { id: 'capping_beam',   label: 'SPW2&3 Retention Walls',         color: '#9a9a96' },
   { id: 'slab',           label: 'Ground Slab',                    color: '#a0a09c' },
-  { id: 'shotcrete',      label: 'Shotcrete',       color: '#999990' },
+  { id: 'shotcrete_side', label: 'Shotcrete — Sides',              color: '#9a9088' },
+  { id: 'shotcrete_back', label: 'Shotcrete — Back',               color: '#827a72' },
   { id: 'excavator',      label: 'Excavator',       color: '#d9b53d' },
   { id: 'neighbour',      label: 'Neighbour House', color: '#a8503c' },
   { id: 'other',          label: 'Other',           color: '#b0b0b0' },
@@ -139,7 +140,7 @@ let prevStageCats = new Set();   // categories present in the previously loaded 
 const hidden = {};        // cat -> bool (persist layer visibility across stages)
 
 // bump ASSET_V whenever model .glb files change, so browsers fetch the new ones
-const ASSET_V = '15';
+const ASSET_V = '16';
 const bust = (url) => url + (url.includes('?') ? '&' : '?') + 'v=' + ASSET_V;
 
 const loader = new GLTFLoader();
@@ -405,7 +406,7 @@ function introReveal(onlyCats) {
 
   // 2. collect the materials to fade, per category, deduped globally
   const order = ['piers','spw_1','spw_2','spw_3','spw_4','spw_5','spw_wall',
-                 'retaining_wall','capping_beam','slab','shotcrete','other','soil'];
+                 'retaining_wall','capping_beam','slab','shotcrete_side','shotcrete_back','other','soil'];
   let present = order.filter(id => groups[id] && groups[id].length);
   if (onlyCats) present = present.filter(id => onlyCats.has(id));
   const seen = new Set();

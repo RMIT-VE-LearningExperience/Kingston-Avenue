@@ -111,7 +111,7 @@
     "id": "shotcrete",
     "label": "06 \u2014 Shotcrete",
     "file": "models/shotcrete.glb",
-    "meshes": 110,
+    "meshes": 111,
     "mb": 0.96,
     "excavator": null
   },
