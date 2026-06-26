@@ -140,7 +140,7 @@ let prevStageCats = new Set();   // categories present in the previously loaded 
 const hidden = {};        // cat -> bool (persist layer visibility across stages)
 
 // bump ASSET_V whenever model .glb files change, so browsers fetch the new ones
-const ASSET_V = '17';
+const ASSET_V = '18';
 const bust = (url) => url + (url.includes('?') ? '&' : '?') + 'v=' + ASSET_V;
 
 const loader = new GLTFLoader();
