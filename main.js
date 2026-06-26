@@ -38,11 +38,142 @@ const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 5000);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.autoClear = false;
 viewport.appendChild(renderer.domElement);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
+
+// ---- viewport orientation gizmo ----
+const viewGizmoScene = new THREE.Scene();
+const viewGizmoCamera = new THREE.OrthographicCamera(-1.65, 1.65, 1.65, -1.65, 0.1, 10);
+viewGizmoCamera.position.set(0, 0, 5);
+const viewGizmoRoot = new THREE.Group();
+viewGizmoScene.add(viewGizmoRoot);
+const viewGizmoSpheres = [];
+const viewGizmoTooltip = document.getElementById('gizmoTooltip');
+let viewGizmoDragging = false;
+let viewGizmoStart = null;
+let viewGizmoLast = null;
+let viewGizmoMoved = false;
+
+function makeAxisLabel(text, color) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 64; canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(32, 32, 24, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#1e1f22';
+  ctx.font = '700 28px -apple-system, Segoe UI, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, 32, 33);
+  const texture = new THREE.CanvasTexture(canvas);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, depthTest: false, depthWrite: false }));
+  sprite.scale.set(0.64, 0.64, 1);
+  sprite.renderOrder = 4;
+  return sprite;
+}
+function addViewGizmoAxis(name, direction, color, view) {
+  const line = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), direction.clone().multiplyScalar(1.05)]),
+    new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.9, depthTest: false })
+  );
+  viewGizmoRoot.add(line);
+
+  const sphere = new THREE.Mesh(
+    new THREE.SphereGeometry(0.3, 24, 16),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.28, depthTest: false })
+  );
+  sphere.position.copy(direction).multiplyScalar(1.22);
+  sphere.userData.view = view;
+  sphere.userData.tooltip = `${name} view`;
+  viewGizmoRoot.add(sphere);
+  viewGizmoSpheres.push(sphere);
+
+  const label = makeAxisLabel(name, '#' + new THREE.Color(color).getHexString());
+  label.position.copy(sphere.position);
+  label.userData.view = view;
+  label.userData.tooltip = `${name} view`;
+  viewGizmoRoot.add(label);
+  viewGizmoSpheres.push(label);
+}
+addViewGizmoAxis('X', new THREE.Vector3(1, 0, 0), 0xbc4050, 'side');
+addViewGizmoAxis('Y', new THREE.Vector3(0, 1, 0), 0x9bd13d, 'top');
+addViewGizmoAxis('Z', new THREE.Vector3(0, 0, 1), 0x4fa3f7, 'front');
+const isoSphere = new THREE.Mesh(
+  new THREE.SphereGeometry(0.28, 24, 16),
+  new THREE.MeshBasicMaterial({ color: 0x4a8db0, transparent: true, opacity: 0.65, depthTest: false })
+);
+isoSphere.position.set(-0.8, -0.85, 0);
+isoSphere.userData.view = 'iso';
+isoSphere.userData.tooltip = 'Iso view';
+viewGizmoRoot.add(isoSphere);
+viewGizmoSpheres.push(isoSphere);
+
+function getViewGizmoBox() {
+  const size = viewport.clientWidth <= 760 ? 116 : 132;
+  const margin = viewport.clientWidth <= 760 ? 10 : 16;
+  return { left: viewport.clientWidth - margin - size, top: margin, size };
+}
+function eventInViewGizmo(event) {
+  const rect = renderer.domElement.getBoundingClientRect();
+  const box = getViewGizmoBox();
+  const x = event.clientX - rect.left;
+  const y = event.clientY - rect.top;
+  return x >= box.left && x <= box.left + box.size && y >= box.top && y <= box.top + box.size;
+}
+function pickViewGizmo(event) {
+  const rect = renderer.domElement.getBoundingClientRect();
+  const box = getViewGizmoBox();
+  const x = event.clientX - rect.left - box.left;
+  const y = event.clientY - rect.top - box.top;
+  viewGizmoRoot.updateMatrixWorld(true);
+
+  let nearest = null;
+  let nearestDistance = Infinity;
+  const worldPos = new THREE.Vector3();
+  const screenPos = new THREE.Vector3();
+  viewGizmoSpheres.forEach(obj => {
+    obj.getWorldPosition(worldPos);
+    screenPos.copy(worldPos).project(viewGizmoCamera);
+    const sx = (screenPos.x * 0.5 + 0.5) * box.size;
+    const sy = (-screenPos.y * 0.5 + 0.5) * box.size;
+    const d = Math.hypot(x - sx, y - sy);
+    if (d < nearestDistance) {
+      nearestDistance = d;
+      nearest = obj;
+    }
+  });
+  return nearestDistance <= 55 ? nearest : null;
+}
+function updateViewGizmoTooltip(event) {
+  if (!viewGizmoTooltip || viewGizmoDragging) return;
+  if (!eventInViewGizmo(event)) {
+    viewGizmoTooltip.style.display = 'none';
+    return;
+  }
+  const picked = pickViewGizmo(event);
+  const rect = renderer.domElement.getBoundingClientRect();
+  viewGizmoTooltip.textContent = picked?.userData.tooltip || 'Drag to rotate view';
+  viewGizmoTooltip.style.left = `${event.clientX - rect.left}px`;
+  viewGizmoTooltip.style.top = `${event.clientY - rect.top - 10}px`;
+  viewGizmoTooltip.style.display = 'block';
+}
+function rotateMainCamera(dx, dy) {
+  stopAutoRotate();
+  const offset = camera.position.clone().sub(controls.target);
+  const spherical = new THREE.Spherical().setFromVector3(offset);
+  spherical.theta -= dx * 0.01;
+  spherical.phi -= dy * 0.01;
+  spherical.phi = THREE.MathUtils.clamp(spherical.phi, 0.08, Math.PI - 0.08);
+  offset.setFromSpherical(spherical);
+  camera.position.copy(controls.target).add(offset);
+  controls.update();
+}
 
 // ---- transform gizmo for manually placing the excavator ----
 const gizmo = new TransformControls(camera, renderer.domElement);
@@ -85,6 +216,7 @@ levelCtrl.addEventListener('objectChange', updateLevelReadout);
 levelCtrl.visible = false;
 scene.add(levelCtrl);
 
+let levelActive = false, levelInit = false;
 // ---- building/slab footprint outline that rides on the level plane ----
 // Points are the concrete-slab perimeter in gltf X/Z (from the model's Slab).
 const SLAB_FOOTPRINT = [
@@ -95,24 +227,97 @@ const SLAB_FOOTPRINT = [
 ];
 const fpGeo = new THREE.BufferGeometry().setFromPoints(
   SLAB_FOOTPRINT.map(p => new THREE.Vector3(p[0], 0, p[1])));
-const slabOutline = new THREE.LineLoop(fpGeo, new THREE.LineBasicMaterial({ color: 0xffcc44 }));
+const slabOutline = new THREE.LineLoop(
+  fpGeo,
+  new THREE.LineBasicMaterial({ color: 0x8fd0ec, transparent: true, opacity: 0.75, depthTest: false })
+);
 slabOutline.visible = false;
+slabOutline.renderOrder = 15;
 scene.add(slabOutline);
-// faint fill so the footprint reads as an area on the plane
 const fpShape = new THREE.Shape(SLAB_FOOTPRINT.map(p => new THREE.Vector2(p[0], p[1])));
 const fillMesh = new THREE.Mesh(
   new THREE.ShapeGeometry(fpShape),
-  new THREE.MeshBasicMaterial({ color: 0xffcc44, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false }));
-fillMesh.rotation.x = Math.PI / 2;    // lay flat (shape XY -> world XZ)
+  new THREE.MeshBasicMaterial({ color: 0x8fd0ec, transparent: true, opacity: 0.08, side: THREE.DoubleSide, depthWrite: false, depthTest: false }));
+fillMesh.rotation.x = Math.PI / 2;
 slabOutline.add(fillMesh);
 
-let levelActive = false, levelInit = false;
+const levelIntersection = new THREE.LineSegments(
+  new THREE.BufferGeometry(),
+  new THREE.LineBasicMaterial({ color: 0xffcc44, transparent: true, opacity: 0.95, depthTest: false })
+);
+levelIntersection.visible = false;
+levelIntersection.renderOrder = 20;
+scene.add(levelIntersection);
+
+const LEVEL_EPS = 1e-5;
+const levelV1 = new THREE.Vector3();
+const levelV2 = new THREE.Vector3();
+const levelV3 = new THREE.Vector3();
+
+function visibleInHierarchy(obj) {
+  for (let node = obj; node; node = node.parent) {
+    if (!node.visible) return false;
+  }
+  return true;
+}
+function addUniquePoint(points, point) {
+  if (!points.some(p => p.distanceToSquared(point) < LEVEL_EPS * LEVEL_EPS)) {
+    points.push(point.clone());
+  }
+}
+function collectEdgeHit(a, b, y, hits) {
+  const da = a.y - y;
+  const db = b.y - y;
+  if (Math.abs(da) <= LEVEL_EPS && Math.abs(db) <= LEVEL_EPS) return;
+  if (Math.abs(da) <= LEVEL_EPS) { addUniquePoint(hits, a); return; }
+  if (Math.abs(db) <= LEVEL_EPS) { addUniquePoint(hits, b); return; }
+  if ((da < 0 && db > 0) || (da > 0 && db < 0)) {
+    addUniquePoint(hits, a.clone().lerp(b, Math.abs(da) / Math.abs(db - da)));
+  }
+}
+function updateLevelIntersection() {
+  const positions = [];
+  if (levelActive && currentRoot) {
+    const y = levelPlane.position.y;
+    currentRoot.updateMatrixWorld(true);
+    currentRoot.traverse(mesh => {
+      const pos = mesh.geometry?.attributes?.position;
+      if (!mesh.isMesh || !pos || !visibleInHierarchy(mesh)) return;
+      const idx = mesh.geometry.index;
+      const triCount = idx ? Math.floor(idx.count / 3) : Math.floor(pos.count / 3);
+      for (let i = 0; i < triCount; i++) {
+        const ia = idx ? idx.getX(i * 3) : i * 3;
+        const ib = idx ? idx.getX(i * 3 + 1) : i * 3 + 1;
+        const ic = idx ? idx.getX(i * 3 + 2) : i * 3 + 2;
+        levelV1.fromBufferAttribute(pos, ia).applyMatrix4(mesh.matrixWorld);
+        levelV2.fromBufferAttribute(pos, ib).applyMatrix4(mesh.matrixWorld);
+        levelV3.fromBufferAttribute(pos, ic).applyMatrix4(mesh.matrixWorld);
+
+        const hits = [];
+        collectEdgeHit(levelV1, levelV2, y, hits);
+        collectEdgeHit(levelV2, levelV3, y, hits);
+        collectEdgeHit(levelV3, levelV1, y, hits);
+        if (hits.length >= 2) {
+          positions.push(
+            hits[0].x, hits[0].y + 0.015, hits[0].z,
+            hits[1].x, hits[1].y + 0.015, hits[1].z
+          );
+        }
+      }
+    });
+  }
+  levelIntersection.geometry.dispose();
+  levelIntersection.geometry = new THREE.BufferGeometry();
+  levelIntersection.geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  levelIntersection.visible = levelActive && positions.length > 0;
+}
 function updateLevelReadout() {
   const el = document.getElementById('levelValue');
   if (el) el.textContent = levelPlane.position.y.toFixed(2) + ' m';
   const inp = document.getElementById('levelInput');
   if (inp && document.activeElement !== inp) inp.value = levelPlane.position.y.toFixed(2);
-  slabOutline.position.y = levelPlane.position.y;   // outline rides on the plane
+  slabOutline.position.y = levelPlane.position.y + 0.01;
+  updateLevelIntersection();
 }
 function sizeLevelPlane() {
   if (modelBounds.isEmpty()) return;
@@ -122,6 +327,167 @@ function sizeLevelPlane() {
   levelPlane.scale.set(s, s, 1);
   levelPlane.position.x = c.x; levelPlane.position.z = c.z;
   if (!levelInit) { levelPlane.position.y = Math.round(c.y); levelInit = true; }
+}
+
+// ---- point-to-point measuring tool ----
+const measureGroup = new THREE.Group();
+scene.add(measureGroup);
+const measureLineMat = new THREE.MeshBasicMaterial({ color: 0xffcc44, depthTest: false, depthWrite: false });
+const measureLine = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 1, 12), measureLineMat);
+measureLine.visible = false;
+measureLine.renderOrder = 30;
+measureGroup.add(measureLine);
+const measureMarkerGeo = new THREE.SphereGeometry(0.32, 16, 12);
+const measureMarkerMat = new THREE.MeshBasicMaterial({ color: 0xffcc44, depthTest: false, depthWrite: false });
+const measureMarkers = [
+  new THREE.Mesh(measureMarkerGeo, measureMarkerMat),
+  new THREE.Mesh(measureMarkerGeo, measureMarkerMat)
+];
+measureMarkers.forEach(marker => {
+  marker.visible = false;
+  marker.renderOrder = 31;
+  measureGroup.add(marker);
+});
+
+const raycaster = new THREE.Raycaster();
+const pointerNdc = new THREE.Vector2();
+const measurePoints = [];
+const measureMidpoint = new THREE.Vector3();
+const measureScreenPoint = new THREE.Vector3();
+const measureScreenA = new THREE.Vector3();
+const measureScreenB = new THREE.Vector3();
+const measureDirection = new THREE.Vector3();
+const measureUp = new THREE.Vector3(0, 1, 0);
+let measureActive = false;
+let measurePointerStart = null;
+
+function measureStatusText(text) {
+  const el = document.getElementById('measureStatus');
+  if (el) el.textContent = text;
+}
+function clearMeasurement(updateStatus = true) {
+  measurePoints.length = 0;
+  measureLine.visible = false;
+  measureMarkers.forEach(marker => { marker.visible = false; });
+  document.getElementById('measureOverlay').style.display = 'none';
+  document.getElementById('measureLabel').style.display = 'none';
+  if (updateStatus) measureStatusText(measureActive ? 'Click first point' : 'Click two points on the model');
+}
+function collectMeasurementTargets(root, targets) {
+  if (!root || !root.visible) return;
+  root.traverse(obj => {
+    if (obj.isMesh && obj.geometry?.attributes?.position && visibleInHierarchy(obj)) targets.push(obj);
+  });
+}
+function getMeasurementHit(event) {
+  const rect = renderer.domElement.getBoundingClientRect();
+  pointerNdc.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  pointerNdc.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(pointerNdc, camera);
+
+  const targets = [];
+  collectMeasurementTargets(currentRoot, targets);
+  Object.values(overlayRoots).forEach(root => collectMeasurementTargets(root, targets));
+  const hits = raycaster.intersectObjects(targets, false);
+  return hits[0] || null;
+}
+function updateMeasurementDisplay() {
+  measureMarkers.forEach((marker, i) => {
+    marker.visible = !!measurePoints[i];
+    if (measurePoints[i]) marker.position.copy(measurePoints[i]);
+  });
+
+  if (measurePoints.length < 2) {
+    measureLine.visible = false;
+    document.getElementById('measureLabel').style.display = 'none';
+    measureStatusText(measureActive && measurePoints.length === 1 ? 'Click second point' : 'Click first point');
+    updateMeasureLabelPosition();
+    return;
+  }
+
+  const distance = measurePoints[0].distanceTo(measurePoints[1]);
+  measureMidpoint.copy(measurePoints[0]).add(measurePoints[1]).multiplyScalar(0.5);
+  measureDirection.copy(measurePoints[1]).sub(measurePoints[0]).normalize();
+  measureLine.position.copy(measureMidpoint);
+  measureLine.scale.set(1, distance, 1);
+  measureLine.quaternion.setFromUnitVectors(measureUp, measureDirection);
+  measureLine.visible = true;
+  measureStatusText(distance.toFixed(2) + ' m');
+  updateMeasureLabelPosition();
+}
+function addMeasurePoint(point) {
+  if (measurePoints.length >= 2) clearMeasurement(false);
+  measurePoints.push(point.clone());
+  updateMeasurementDisplay();
+}
+function updateMeasureLabelPosition() {
+  const label = document.getElementById('measureLabel');
+  const overlay = document.getElementById('measureOverlay');
+  if (!label || !overlay || measurePoints.length === 0) return;
+
+  measureScreenA.copy(measurePoints[0]).project(camera);
+  const startVisible = measureScreenA.z >= -1 && measureScreenA.z <= 1;
+  const x1 = (measureScreenA.x * 0.5 + 0.5) * viewport.clientWidth;
+  const y1 = (-measureScreenA.y * 0.5 + 0.5) * viewport.clientHeight;
+  overlay.style.display = startVisible ? 'block' : 'none';
+  if (!startVisible) {
+    label.style.display = 'none';
+    return;
+  }
+
+  const line = document.getElementById('measureOverlayLine');
+  const start = document.getElementById('measureOverlayStart');
+  const end = document.getElementById('measureOverlayEnd');
+  const startLabel = document.getElementById('measureOverlayStartLabel');
+  const endLabel = document.getElementById('measureOverlayEndLabel');
+  start.classList.remove('hidden');
+  start.setAttribute('transform', `translate(${x1} ${y1})`);
+  startLabel.classList.remove('hidden');
+  startLabel.setAttribute('x', x1 + 12);
+  startLabel.setAttribute('y', y1 - 25);
+
+  if (measurePoints.length < 2) {
+    line.classList.add('pending');
+    end.classList.add('hidden');
+    endLabel.classList.add('hidden');
+    label.style.display = 'none';
+    return;
+  }
+
+  measureMidpoint.copy(measurePoints[0]).add(measurePoints[1]).multiplyScalar(0.5);
+  measureScreenPoint.copy(measureMidpoint).project(camera);
+  measureScreenB.copy(measurePoints[1]).project(camera);
+  const endVisible = measureScreenB.z >= -1 && measureScreenB.z <= 1;
+  const labelVisible = measureScreenPoint.z >= -1 && measureScreenPoint.z <= 1 && endVisible;
+  label.style.display = labelVisible ? 'block' : 'none';
+  if (!endVisible) return;
+
+  const x2 = (measureScreenB.x * 0.5 + 0.5) * viewport.clientWidth;
+  const y2 = (-measureScreenB.y * 0.5 + 0.5) * viewport.clientHeight;
+  line.classList.remove('pending');
+  line.setAttribute('x1', x1);
+  line.setAttribute('y1', y1);
+  line.setAttribute('x2', x2);
+  line.setAttribute('y2', y2);
+  end.classList.remove('hidden');
+  endLabel.classList.remove('hidden');
+  end.setAttribute('transform', `translate(${x2} ${y2})`);
+  endLabel.setAttribute('x', x2 + 12);
+  endLabel.setAttribute('y', y2 - 25);
+
+  const distance = measurePoints[0].distanceTo(measurePoints[1]);
+  label.textContent = distance.toFixed(2) + ' m';
+  label.style.left = ((measureScreenPoint.x * 0.5 + 0.5) * viewport.clientWidth) + 'px';
+  label.style.top = ((-measureScreenPoint.y * 0.5 + 0.5) * viewport.clientHeight) + 'px';
+}
+function setMeasureActive(on) {
+  measureActive = on;
+  if (measureActive) autoRotateCamera = false;
+  const btn = document.getElementById('measureToggle');
+  btn.classList.toggle('active', measureActive);
+  btn.setAttribute('aria-label', measureActive ? 'Stop measuring' : 'Start measuring');
+  btn.title = measureActive ? 'Stop measuring' : 'Measure distance';
+  measureStatusText(measureActive ? (measurePoints.length ? 'Click second point' : 'Click first point') : 'Click two points on the model');
 }
 
 let autoRotateCamera = true;
@@ -137,6 +503,62 @@ function stopAutoRotate() {
 renderer.domElement.addEventListener('pointerdown', stopAutoRotate);
 renderer.domElement.addEventListener('wheel', stopAutoRotate, { passive: true });
 renderer.domElement.addEventListener('touchstart', stopAutoRotate, { passive: true });
+renderer.domElement.addEventListener('pointerdown', (event) => {
+  if (!eventInViewGizmo(event)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  if (viewGizmoTooltip) viewGizmoTooltip.style.display = 'none';
+  viewGizmoDragging = true;
+  viewGizmoMoved = false;
+  viewGizmoStart = { x: event.clientX, y: event.clientY };
+  viewGizmoLast = { x: event.clientX, y: event.clientY };
+  controls.enabled = false;
+  renderer.domElement.setPointerCapture?.(event.pointerId);
+}, true);
+renderer.domElement.addEventListener('pointermove', updateViewGizmoTooltip);
+renderer.domElement.addEventListener('pointerleave', () => {
+  if (viewGizmoTooltip) viewGizmoTooltip.style.display = 'none';
+});
+window.addEventListener('pointermove', (event) => {
+  if (!viewGizmoDragging || !viewGizmoLast) return;
+  event.preventDefault();
+  const dx = event.clientX - viewGizmoLast.x;
+  const dy = event.clientY - viewGizmoLast.y;
+  if (Math.hypot(event.clientX - viewGizmoStart.x, event.clientY - viewGizmoStart.y) > 3) {
+    viewGizmoMoved = true;
+  }
+  rotateMainCamera(dx, dy);
+  viewGizmoLast = { x: event.clientX, y: event.clientY };
+}, { capture: true });
+window.addEventListener('pointerup', (event) => {
+  if (!viewGizmoDragging) return;
+  event.preventDefault();
+  const wasClick = !viewGizmoMoved && viewGizmoStart &&
+    Math.hypot(event.clientX - viewGizmoStart.x, event.clientY - viewGizmoStart.y) <= 3;
+  viewGizmoDragging = false;
+  viewGizmoStart = null;
+  viewGizmoLast = null;
+  controls.enabled = true;
+  renderer.domElement.releasePointerCapture?.(event.pointerId);
+  if (wasClick) {
+    const picked = pickViewGizmo(event);
+    if (picked?.userData.view) frameView(picked.userData.view);
+  }
+}, { capture: true });
+renderer.domElement.addEventListener('pointerdown', (event) => {
+  if (!measureActive || event.button !== 0) return;
+  measurePointerStart = { x: event.clientX, y: event.clientY };
+});
+renderer.domElement.addEventListener('pointerup', (event) => {
+  if (!measureActive || event.button !== 0 || !measurePointerStart) return;
+  const dx = event.clientX - measurePointerStart.x;
+  const dy = event.clientY - measurePointerStart.y;
+  measurePointerStart = null;
+  if (gizmo.dragging || levelCtrl.dragging) return;
+  if (Math.hypot(dx, dy) > 5) return;
+  const hit = getMeasurementHit(event);
+  if (hit) addMeasurePoint(hit.point);
+});
 
 // lighting
 scene.add(new THREE.HemisphereLight(0xffffff, 0x444448, 1.1));
@@ -175,6 +597,161 @@ const loadingEl = document.getElementById('loading');
 const EXCAVATOR_FILE = 'models/excavator.glb';
 const overlayRoots = {};   // file -> gltf scene
 const overlayOn = {};      // file -> user wants it on
+
+// ---- onboarding / help tour ----
+const TOUR_STORAGE_KEY = 'kingstonViewerOnboardingSeen';
+const tourEl = document.getElementById('onboarding');
+const tourSpotlight = document.getElementById('tourSpotlight');
+const tourCard = document.getElementById('tourCard');
+const tourCount = document.getElementById('tourCount');
+const tourTitle = document.getElementById('tourTitle');
+const tourBody = document.getElementById('tourBody');
+const tourBack = document.getElementById('tourBack');
+const tourNext = document.getElementById('tourNext');
+const tourSkip = document.getElementById('tourSkip');
+const tourSteps = [
+  {
+    target: '#viewport',
+    title: '3D model workspace',
+    body: 'Drag to orbit the excavation model, scroll to zoom, and right-drag to pan around the site.'
+  },
+  {
+    target: '#layers',
+    title: 'Layers',
+    body: 'Turn construction elements on or off to isolate soil, walls, slabs, piers, and other model groups.'
+  },
+  {
+    target: '.overlay-row',
+    title: 'Overlays',
+    body: 'Add contextual models such as the excavator, neighbouring house, retaining wall, or fence when needed.'
+  },
+  {
+    target: '#scrubber',
+    title: 'Stage timeline',
+    body: 'Move through excavation stages with the timeline. The model reloads to show the selected stage.'
+  },
+  {
+    target: '#resetBtn',
+    title: 'View controls',
+    body: 'Use zoom, reset, measure, and level shortcuts from the floating toolbar beside the orientation cube.'
+  },
+  {
+    target: '#measureToggle',
+    title: 'Measure distance',
+    body: 'Start measuring, then click two model points to display a distance directly in the viewport.'
+  },
+  {
+    target: '#levelToolToggle',
+    title: 'Level plane',
+    body: 'Show a movable level plane to read heights and inspect where the model intersects a selected level.'
+  },
+  {
+    target: '#soilOpacity',
+    title: 'Soil X-ray',
+    body: 'Fade the soil layer to reveal retained structures and staged work hidden below the terrain.'
+  },
+  {
+    target: '#helpTourToggle',
+    title: 'Help',
+    body: 'Open this walkthrough again any time from the question-mark button.'
+  }
+];
+let tourIndex = 0;
+let tourOpen = false;
+
+function hasSeenTour() {
+  try { return localStorage.getItem(TOUR_STORAGE_KEY) === '1'; }
+  catch { return false; }
+}
+function markTourSeen() {
+  try { localStorage.setItem(TOUR_STORAGE_KEY, '1'); }
+  catch {}
+}
+function visibleTourSteps() {
+  return tourSteps.filter(step => {
+    const el = document.querySelector(step.target);
+    if (!el) return false;
+    const rect = el.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  });
+}
+function clampTourCard(left, top) {
+  const margin = 14;
+  const rect = tourCard.getBoundingClientRect();
+  const maxLeft = window.innerWidth - rect.width - margin;
+  const maxTop = window.innerHeight - rect.height - margin;
+  tourCard.style.left = `${THREE.MathUtils.clamp(left, margin, Math.max(margin, maxLeft))}px`;
+  tourCard.style.top = `${THREE.MathUtils.clamp(top, margin, Math.max(margin, maxTop))}px`;
+}
+function positionTour(step) {
+  const target = document.querySelector(step.target);
+  if (!target) return;
+
+  target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'auto' });
+  const rect = target.getBoundingClientRect();
+  const pad = 8;
+  tourSpotlight.style.left = `${Math.max(8, rect.left - pad)}px`;
+  tourSpotlight.style.top = `${Math.max(8, rect.top - pad)}px`;
+  tourSpotlight.style.width = `${Math.min(window.innerWidth - 16, rect.width + pad * 2)}px`;
+  tourSpotlight.style.height = `${Math.min(window.innerHeight - 16, rect.height + pad * 2)}px`;
+
+  const cardRect = tourCard.getBoundingClientRect();
+  const gap = 14;
+  let left = rect.right + gap;
+  let top = rect.top;
+  if (left + cardRect.width > window.innerWidth - gap) {
+    left = rect.left - cardRect.width - gap;
+  }
+  if (left < gap) {
+    left = Math.min(Math.max(gap, rect.left), window.innerWidth - cardRect.width - gap);
+    top = rect.bottom + gap;
+  }
+  if (top + cardRect.height > window.innerHeight - gap) {
+    top = rect.top - cardRect.height - gap;
+  }
+  clampTourCard(left, top);
+}
+function renderTour() {
+  const steps = visibleTourSteps();
+  if (!tourOpen || !steps.length) return;
+  tourIndex = THREE.MathUtils.clamp(tourIndex, 0, steps.length - 1);
+  const step = steps[tourIndex];
+  tourCount.textContent = `${tourIndex + 1} of ${steps.length}`;
+  tourTitle.textContent = step.title;
+  tourBody.textContent = step.body;
+  tourBack.disabled = tourIndex === 0;
+  tourNext.textContent = tourIndex === steps.length - 1 ? 'Done' : 'Next';
+  requestAnimationFrame(() => positionTour(step));
+}
+function closeTour(saveSeen = true) {
+  tourOpen = false;
+  tourEl.hidden = true;
+  if (saveSeen) markTourSeen();
+}
+function openTour(startIndex = 0) {
+  tourIndex = startIndex;
+  tourOpen = true;
+  tourEl.hidden = false;
+  stopAutoRotate();
+  renderTour();
+}
+function maybeOpenFirstRunTour() {
+  if (hasSeenTour()) return;
+  setTimeout(() => openTour(0), 350);
+}
+
+document.getElementById('helpTourToggle').addEventListener('click', () => openTour(0));
+tourBack.addEventListener('click', () => { tourIndex -= 1; renderTour(); });
+tourNext.addEventListener('click', () => {
+  const steps = visibleTourSteps();
+  if (tourIndex >= steps.length - 1) closeTour();
+  else { tourIndex += 1; renderTour(); }
+});
+tourSkip.addEventListener('click', () => closeTour());
+window.addEventListener('resize', () => { if (tourOpen) renderTour(); });
+window.addEventListener('keydown', (event) => {
+  if (tourOpen && event.key === 'Escape') closeTour();
+});
 
 // Position/orient/show the excavator for the current stage.
 // stage.excavator = { pos:[x,y,z], quat:[x,y,z,w] }, or null (stage has no excavator).
@@ -226,9 +803,8 @@ document.getElementById('gizmoMove').addEventListener('click', () => setGizmoMod
 document.getElementById('gizmoRotate').addEventListener('click', () => setGizmoMode('rotate'));
 setGizmoMode('translate');
 
-// ---- level plane toggle ----
-document.getElementById('levelToggle').addEventListener('click', () => {
-  levelActive = !levelActive;
+function setLevelActive(on) {
+  levelActive = on;
   if (levelActive) { autoRotateCamera = false; sizeLevelPlane(); levelCtrl.attach(levelPlane); }
   else { levelCtrl.detach(); }
   levelPlane.visible = levelActive;
@@ -238,12 +814,23 @@ document.getElementById('levelToggle').addEventListener('click', () => {
   const btn = document.getElementById('levelToggle');
   btn.classList.toggle('active', levelActive);
   btn.textContent = levelActive ? 'Hide Level Plane' : 'Show Level Plane';
+  const iconBtn = document.getElementById('levelToolToggle');
+  iconBtn.classList.toggle('active', levelActive);
+  iconBtn.setAttribute('aria-label', levelActive ? 'Hide level plane' : 'Show level plane');
+  iconBtn.title = levelActive ? 'Hide level plane' : 'Show level plane';
   updateLevelReadout();
-});
+}
+
+// ---- level plane toggle ----
+document.getElementById('levelToggle').addEventListener('click', () => setLevelActive(!levelActive));
+document.getElementById('levelToolToggle').addEventListener('click', () => setLevelActive(!levelActive));
 document.getElementById('levelInput').addEventListener('input', () => {
   const v = parseFloat(document.getElementById('levelInput').value);
-  if (!Number.isNaN(v)) { levelPlane.position.y = v; slabOutline.position.y = v; document.getElementById('levelValue').textContent = v.toFixed(2) + ' m'; }
+  if (!Number.isNaN(v)) { levelPlane.position.y = v; updateLevelReadout(); }
 });
+
+document.getElementById('measureToggle').addEventListener('click', () => setMeasureActive(!measureActive));
+document.getElementById('measureClear').addEventListener('click', () => clearMeasurement());
 
 document.querySelectorAll('.overlay-row').forEach(row => {
   const cb = row.querySelector('input');
@@ -283,6 +870,7 @@ function disposeRoot(root) {
 function loadStage(idx) {
   const stage = stagesList[idx];
   if (!stage) return;
+  const shouldRunFirstTour = firstLoad && !hasSeenTour();
   stageIndex = idx;
   syncScrubber(idx);
   loadingEl.textContent = 'Loading ' + stage.label + '…';
@@ -305,6 +893,7 @@ function loadStage(idx) {
     });
     scene.add(root);
     currentRoot = root;
+    clearMeasurement();
 
     // re-apply persisted layer visibility + current soil opacity
     Object.keys(groups).forEach(cat => {
@@ -324,7 +913,9 @@ function loadStage(idx) {
     introReveal(newCats);
     buildLayerPanel();
     updateExcavatorForStage();
+    updateLevelIntersection();
     loadingEl.style.display = 'none';
+    if (shouldRunFirstTour) maybeOpenFirstRunTour();
   }, undefined, (err) => {
     loadingEl.textContent = 'Failed to load: ' + err;
   });
@@ -401,6 +992,8 @@ function buildLayerPanel() {
       groups[c.id].forEach(m => m.visible = cb.checked);
       row.classList.toggle('off', !cb.checked);
       row.querySelector('.eye').innerHTML = eyeIcon(cb.checked);
+      updateLevelIntersection();
+      clearMeasurement();
     });
     host.appendChild(row);
   });
@@ -539,6 +1132,19 @@ function animate() {
     camera.position.sub(controls.target).applyAxisAngle(new THREE.Vector3(0, 1, 0), AUTO_ROTATE_SPEED).add(controls.target);
   }
   controls.update();
+  updateMeasureLabelPosition();
+  renderer.setScissorTest(false);
+  renderer.setViewport(0, 0, viewport.clientWidth, viewport.clientHeight);
+  renderer.clear();
   renderer.render(scene, camera);
+
+  viewGizmoRoot.quaternion.copy(camera.quaternion).invert();
+  const gizmoBox = getViewGizmoBox();
+  renderer.clearDepth();
+  renderer.setScissor(gizmoBox.left, viewport.clientHeight - gizmoBox.top - gizmoBox.size, gizmoBox.size, gizmoBox.size);
+  renderer.setViewport(gizmoBox.left, viewport.clientHeight - gizmoBox.top - gizmoBox.size, gizmoBox.size, gizmoBox.size);
+  renderer.setScissorTest(true);
+  renderer.render(viewGizmoScene, viewGizmoCamera);
+  renderer.setScissorTest(false);
 }
 animate();
