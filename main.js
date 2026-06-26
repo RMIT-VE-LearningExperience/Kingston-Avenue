@@ -583,6 +583,13 @@ let firstLoad = true;
 let prevStageCats = new Set();   // categories present in the previously loaded stage
 const hidden = {};        // cat -> bool (persist layer visibility across stages)
 
+// Temporary web-side correction until the Blender stage exports are regenerated.
+// The structural layout places SPW4 in stage 05 (CB2 / SPW4), but the current
+// stage 03 GLB contains SPW4 meshes. Suppress them for stage 03 only.
+const STAGE_CATEGORY_EXCLUSIONS = {
+  spw1: new Set(['spw_4'])
+};
+
 // bump ASSET_V whenever model .glb files change, so browsers fetch the new ones
 const ASSET_V = '23';
 const bust = (url) => url + (url.includes('?') ? '&' : '?') + 'v=' + ASSET_V;
@@ -882,9 +889,14 @@ function loadStage(idx) {
     CATEGORIES.forEach(c => groups[c.id] = []);
 
     const root = gltf.scene;
+    const excludedCats = STAGE_CATEGORY_EXCLUSIONS[stage.id] || new Set();
     root.traverse((o) => {
       if (!o.isMesh) return;
       const cat = (o.userData && o.userData.cat) || 'other';
+      if (excludedCats.has(cat)) {
+        o.visible = false;
+        return;
+      }
       (groups[cat] || groups.other).push(o);
       if (cat === 'soil') {
         const mats = Array.isArray(o.material) ? o.material : [o.material];
