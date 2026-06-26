@@ -85,12 +85,34 @@ levelCtrl.addEventListener('objectChange', updateLevelReadout);
 levelCtrl.visible = false;
 scene.add(levelCtrl);
 
+// ---- building/slab footprint outline that rides on the level plane ----
+// Points are the concrete-slab perimeter in gltf X/Z (from the model's Slab).
+const SLAB_FOOTPRINT = [
+  [7.30,0.75],[7.30,0.30],[7.31,-0.70],[7.32,-1.69],[8.10,-5.27],[8.89,-8.87],
+  [9.68,-12.46],[10.47,-16.04],[10.93,-16.03],[29.64,-16.08],[29.61,-15.34],
+  [29.62,-14.74],[32.32,-14.74],[32.32,-7.48],[28.40,-7.49],[28.40,-0.45],
+  [20.49,-0.45],[20.49,0.22],[12.26,0.23],[12.26,0.68],[7.75,0.75]
+];
+const fpGeo = new THREE.BufferGeometry().setFromPoints(
+  SLAB_FOOTPRINT.map(p => new THREE.Vector3(p[0], 0, p[1])));
+const slabOutline = new THREE.LineLoop(fpGeo, new THREE.LineBasicMaterial({ color: 0xffcc44 }));
+slabOutline.visible = false;
+scene.add(slabOutline);
+// faint fill so the footprint reads as an area on the plane
+const fpShape = new THREE.Shape(SLAB_FOOTPRINT.map(p => new THREE.Vector2(p[0], p[1])));
+const fillMesh = new THREE.Mesh(
+  new THREE.ShapeGeometry(fpShape),
+  new THREE.MeshBasicMaterial({ color: 0xffcc44, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false }));
+fillMesh.rotation.x = Math.PI / 2;    // lay flat (shape XY -> world XZ)
+slabOutline.add(fillMesh);
+
 let levelActive = false, levelInit = false;
 function updateLevelReadout() {
   const el = document.getElementById('levelValue');
   if (el) el.textContent = levelPlane.position.y.toFixed(2) + ' m';
   const inp = document.getElementById('levelInput');
   if (inp && document.activeElement !== inp) inp.value = levelPlane.position.y.toFixed(2);
+  slabOutline.position.y = levelPlane.position.y;   // outline rides on the plane
 }
 function sizeLevelPlane() {
   if (modelBounds.isEmpty()) return;
@@ -211,6 +233,7 @@ document.getElementById('levelToggle').addEventListener('click', () => {
   else { levelCtrl.detach(); }
   levelPlane.visible = levelActive;
   levelCtrl.visible = levelActive;
+  slabOutline.visible = levelActive;
   document.getElementById('levelReadout').style.display = levelActive ? 'block' : 'none';
   const btn = document.getElementById('levelToggle');
   btn.classList.toggle('active', levelActive);
@@ -219,7 +242,7 @@ document.getElementById('levelToggle').addEventListener('click', () => {
 });
 document.getElementById('levelInput').addEventListener('input', () => {
   const v = parseFloat(document.getElementById('levelInput').value);
-  if (!Number.isNaN(v)) { levelPlane.position.y = v; document.getElementById('levelValue').textContent = v.toFixed(2) + ' m'; }
+  if (!Number.isNaN(v)) { levelPlane.position.y = v; slabOutline.position.y = v; document.getElementById('levelValue').textContent = v.toFixed(2) + ' m'; }
 });
 
 document.querySelectorAll('.overlay-row').forEach(row => {
