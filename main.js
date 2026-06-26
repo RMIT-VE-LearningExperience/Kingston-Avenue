@@ -360,12 +360,15 @@ const measureDirection = new THREE.Vector3();
 const measureUp = new THREE.Vector3(0, 1, 0);
 let measureActive = false;
 let measurePointerStart = null;
+let measureDragIndex = -1;
+let measureDragPointerId = null;
 
 function measureStatusText(text) {
   const el = document.getElementById('measureStatus');
   if (el) el.textContent = text;
 }
 function clearMeasurement(updateStatus = true) {
+  endMeasurePinDrag();
   measurePoints.length = 0;
   measureLine.visible = false;
   measureMarkers.forEach(marker => { marker.visible = false; });
@@ -418,6 +421,40 @@ function updateMeasurementDisplay() {
 function addMeasurePoint(point) {
   if (measurePoints.length >= 2) clearMeasurement(false);
   measurePoints.push(point.clone());
+  updateMeasurementDisplay();
+}
+function beginMeasurePinDrag(index, event) {
+  if (measurePoints.length <= index || event.button !== 0) return;
+  event.preventDefault();
+  event.stopPropagation();
+  stopAutoRotate();
+  controls.enabled = false;
+  measureDragIndex = index;
+  measureDragPointerId = event.pointerId;
+  event.currentTarget.classList.add('dragging');
+  event.currentTarget.setPointerCapture?.(event.pointerId);
+  measureStatusText(index === 0 ? 'Drag start pin over the model' : 'Drag end pin over the model');
+}
+function updateMeasurePinDrag(event) {
+  if (measureDragIndex < 0) return;
+  event.preventDefault();
+  const hit = getMeasurementHit(event);
+  if (!hit) return;
+  measurePoints[measureDragIndex].copy(hit.point);
+  updateMeasurementDisplay();
+}
+function endMeasurePinDrag(event) {
+  if (measureDragIndex < 0) return;
+  const pin = measureDragIndex === 0
+    ? document.getElementById('measureOverlayStart')
+    : document.getElementById('measureOverlayEnd');
+  pin?.classList.remove('dragging');
+  if (event && measureDragPointerId !== null) {
+    pin?.releasePointerCapture?.(measureDragPointerId);
+  }
+  measureDragIndex = -1;
+  measureDragPointerId = null;
+  controls.enabled = true;
   updateMeasurementDisplay();
 }
 function updateMeasureLabelPosition() {
@@ -489,6 +526,11 @@ function setMeasureActive(on) {
   btn.title = measureActive ? 'Stop measuring' : 'Measure distance';
   measureStatusText(measureActive ? (measurePoints.length ? 'Click second point' : 'Click first point') : 'Click two points on the model');
 }
+
+document.getElementById('measureOverlayStart').addEventListener('pointerdown', (event) => beginMeasurePinDrag(0, event));
+document.getElementById('measureOverlayEnd').addEventListener('pointerdown', (event) => beginMeasurePinDrag(1, event));
+window.addEventListener('pointermove', updateMeasurePinDrag, { capture: true });
+window.addEventListener('pointerup', endMeasurePinDrag, { capture: true });
 
 let autoRotateCamera = true;
 const AUTO_ROTATE_SPEED = 0.0012;
@@ -836,7 +878,10 @@ document.getElementById('levelInput').addEventListener('input', () => {
   if (!Number.isNaN(v)) { levelPlane.position.y = v; updateLevelReadout(); }
 });
 
-document.getElementById('measureToggle').addEventListener('click', () => setMeasureActive(!measureActive));
+document.getElementById('measureToggle').addEventListener('click', () => {
+  if (measureActive) clearMeasurement(false);
+  setMeasureActive(!measureActive);
+});
 document.getElementById('measureClear').addEventListener('click', () => clearMeasurement());
 
 document.querySelectorAll('.overlay-row').forEach(row => {
