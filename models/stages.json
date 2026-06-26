@@ -3,8 +3,8 @@
     "id": "ngl",
     "label": "00 \u2014 NGL (Ground Level)",
     "file": "models/ngl.glb",
-    "meshes": 29,
-    "mb": 0.4,
+    "meshes": 15,
+    "mb": 0.31,
     "excavator": {
       "pos": [
         -7.632,
@@ -63,8 +63,8 @@
     "id": "spw1",
     "label": "03 \u2014 SPW1",
     "file": "models/spw1.glb",
-    "meshes": 98,
-    "mb": 0.88,
+    "meshes": 76,
+    "mb": 0.73,
     "excavator": {
       "pos": [
         -5.196,
@@ -83,8 +83,8 @@
     "id": "cb1_spw2_3",
     "label": "04 \u2014 CB1 / SPW 2+3",
     "file": "models/cb1_spw2_3.glb",
-    "meshes": 148,
-    "mb": 1.21,
+    "meshes": 82,
+    "mb": 0.78,
     "excavator": {
       "pos": [
         12.0,
@@ -103,24 +103,24 @@
     "id": "cb2_spw4",
     "label": "05 \u2014 CB2 / SPW4",
     "file": "models/cb2_spw4.glb",
-    "meshes": 205,
-    "mb": 1.62,
+    "meshes": 103,
+    "mb": 0.93,
     "excavator": null
   },
   {
     "id": "shotcrete",
     "label": "06 \u2014 Shotcrete",
     "file": "models/shotcrete.glb",
-    "meshes": 213,
-    "mb": 1.65,
+    "meshes": 111,
+    "mb": 0.96,
     "excavator": null
   },
   {
     "id": "slab",
     "label": "07 \u2014 Slab",
     "file": "models/slab.glb",
-    "meshes": 214,
-    "mb": 1.66,
+    "meshes": 112,
+    "mb": 0.98,
     "excavator": null
   }
 ]
