@@ -50,27 +50,16 @@ When a pile layer's checkbox is off, its bore holes are carved out of the terrai
 
 GitHub Pages — push to `main`, the site deploys automatically from the repo root at `https://rmit-ve-learningexperience.github.io/Kingston-Avenue/`.
 
-## SPW4 staging correction
+## SPW4 staging (installed before the stage-03 excavation)
 
-Source reference:
+Per site sequencing (Chris Nguyen, Jul 2026) — this supersedes the earlier reading of drawing `S02 Retention Layout Plan rev A`, which shows where the walls are, not when they are built:
 
-- `Kingston_Struct Engineer_Excavation Layout.pdf`
-- Drawing `S02`, `Retention Layout Plan`, revision `A`
+- `SPW4` (piles + `CB2` capping beam, **no shotcrete**) is installed **before** the stage 03 excavation. The 21 `spw_4` pile meshes in `models/spw1.glb` are therefore correct, and the former web-side stage-03 suppression has been removed (`STAGE_CATEGORY_EXCLUSIONS` is now empty but the mechanism is kept).
+- At stage 04, the SPW4 cap and beam are **covered with protective soil** — this holds back the top soil so SPW2 & SPW3 below can be excavated.
+- The SPW4 face is exposed from stage `05 — CB2 / SPW4` onward.
 
-Finding:
+Blender/source work still needed in `Kingston_v7.blend` to complete this (web side is done):
 
-- `SPW4` belongs with `CB2 / SPW4`, which is represented in the web viewer as stage `05 - CB2 / SPW4`.
-- `SPW4` should not appear in stage `03 - SPW1`.
-- The current `models/spw1.glb` export contains 21 meshes tagged with `extras.cat = "spw_4"`.
-
-Temporary web fix:
-
-- `main.js` contains `STAGE_CATEGORY_EXCLUSIONS`.
-- It suppresses category `spw_4` only when loading stage id `spw1`.
-- This keeps `SPW4` visible from stage `05 - CB2 / SPW4` onward.
-
-Blender/source fix needed:
-
-- Remove or exclude the `SPW4` objects from the stage 03 / `spw1.glb` export.
-- Keep those `SPW4` objects in the stage 05 / `cb2_spw4.glb` export and later cumulative stages.
-- After regenerating the GLBs, remove the temporary `spw1 -> spw_4` web exclusion from `main.js`.
+1. **CB2 capping beam is missing from every export** — all existing `capping_beam` meshes are CB1-named. Model/tag CB2 (`extras.cat = "capping_beam"`) and include it in the stage 03 export (`spw1.glb`) and all later cumulative stages.
+2. **Stage 04 export (`cb1_spw2_3.glb`) contains no SPW4 at all** — include the SPW4 piles (+ CB2 beam) and add the protective soil mound covering the cap/beam to the stage-04 terrain.
+3. Re-export the affected GLBs and bump `ASSET_V` in `main.js` so browsers refetch them.

@@ -631,12 +631,11 @@ let firstLoad = true;
 let prevStageCats = new Set();   // categories present in the previously loaded stage
 const hidden = {};        // cat -> bool (persist layer visibility across stages)
 
-// Temporary web-side correction until the Blender stage exports are regenerated.
-// The structural layout places SPW4 in stage 05 (CB2 / SPW4), but the current
-// stage 03 GLB contains SPW4 meshes. Suppress them for stage 03 only.
-const STAGE_CATEGORY_EXCLUSIONS = {
-  spw1: new Set(['spw_4'])
-};
+// Per-stage category suppression, e.g. { spw1: new Set(['spw_4']) }.
+// Currently unused: per site sequencing, SPW4 is installed before the stage 03
+// excavation, so the SPW4 piles in the stage 03 export are correct (see
+// "SPW4 staging" in CLAUDE.md).
+const STAGE_CATEGORY_EXCLUSIONS = {};
 
 // bump ASSET_V whenever model .glb files change, so browsers fetch the new ones
 const ASSET_V = '23';
