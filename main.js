@@ -923,6 +923,76 @@ function disposeRoot(root) {
   root.parent?.remove(root);
 }
 
+// ---- drilled hole markers ----
+// Bore-hole discs shown at each pile position when that pile layer is hidden,
+// illustrating the holes drilled before the piles were cast. Positions, tops
+// and radii are derived from the pile meshes themselves, so re-exported GLBs
+// stay correct automatically.
+let holeGroups = {};             // cat -> THREE.Group of discs
+const holeMat = new THREE.MeshStandardMaterial({ color: 0x3a3b3e, roughness: 0.95 });
+const HOLE_MAX_FOOTPRINT = 1.0;  // meshes wider than this are caps/soil covers, not pile shafts
+const HOLE_CLUSTER_DIST = 0.45;  // merge duplicate/segmented meshes within this XZ distance
+const HOLE_RADIUS_SCALE = 1.15;  // discs slightly wider than the pile so they read at a distance
+const HOLE_THICKNESS = 0.06;
+
+// Which pile categories have been drilled by a given stage (manifest order):
+// SPW1 (RL 6.50) from stage 02 — CB1/SPW5+RTW1; every other pile wall and the
+// bored piers from stage 04 — CB1/SPW2+3. Stages 00–01 show no holes.
+const PILE_CATS = ['piers', 'spw_1', 'spw_2', 'spw_3', 'spw_4', 'spw_5', 'spw_wall'];
+function holeCatsForStage(idx) {
+  if (idx >= 4) return PILE_CATS;
+  if (idx >= 2) return ['spw_1'];
+  return [];
+}
+
+function disposeHoleMarkers() {
+  Object.values(holeGroups).forEach(g => {
+    g.children.forEach(d => d.geometry.dispose());
+    g.parent?.remove(g);
+  });
+  holeGroups = {};
+}
+
+function buildHoleMarkers() {
+  disposeHoleMarkers();
+  const raycaster = new THREE.Raycaster();
+  const down = new THREE.Vector3(0, -1, 0);
+  const box = new THREE.Box3();
+  holeCatsForStage(stageIndex).forEach(cat => {
+    // one entry per physical pile: cluster mesh centres in XZ (the GLBs
+    // contain duplicate meshes and multi-segment piles at the same spot)
+    const clusters = [];
+    (groups[cat] || []).forEach(m => {
+      box.setFromObject(m);
+      const dx = box.max.x - box.min.x, dz = box.max.z - box.min.z;
+      if (Math.max(dx, dz) > HOLE_MAX_FOOTPRINT) return;
+      const p = { x: (box.min.x + box.max.x) / 2, z: (box.min.z + box.max.z) / 2,
+                  top: box.max.y, r: Math.max(dx, dz) / 2 };
+      const c = clusters.find(c => (c.x - p.x) ** 2 + (c.z - p.z) ** 2 < HOLE_CLUSTER_DIST ** 2);
+      if (c) { c.top = Math.max(c.top, p.top); c.r = Math.max(c.r, p.r); }
+      else clusters.push(p);
+    });
+    if (!clusters.length) return;
+    const group = new THREE.Group();
+    clusters.forEach(c => {
+      // if the pile top sits below the terrain surface, lift the disc up to
+      // the soil so the hole still shows on the ground
+      let y = c.top;
+      raycaster.set(new THREE.Vector3(c.x, 1000, c.z), down);
+      const hit = raycaster.intersectObjects(groups.soil || [], false)[0];
+      if (hit && hit.point.y > y) y = hit.point.y;
+      const r = c.r * HOLE_RADIUS_SCALE;
+      const disc = new THREE.Mesh(new THREE.CylinderGeometry(r, r, HOLE_THICKNESS, 24), holeMat);
+      // cluster coords are world-space; discs live under vrWorld
+      disc.position.copy(vrWorld.worldToLocal(new THREE.Vector3(c.x, y + HOLE_THICKNESS / 2, c.z)));
+      group.add(disc);
+    });
+    group.visible = !!hidden[cat];  // holes show only while the pile layer is off
+    vrWorld.add(group);
+    holeGroups[cat] = group;
+  });
+}
+
 function loadStage(idx) {
   const stage = stagesList[idx];
   if (!stage) return;
@@ -953,6 +1023,7 @@ function loadStage(idx) {
       }
     });
     vrWorld.add(root);
+    scene.updateMatrixWorld(true);   // hole markers measure world-space bounds
     currentRoot = root;
     clearMeasurement();
 
@@ -961,6 +1032,7 @@ function loadStage(idx) {
       if (hidden[cat]) groups[cat].forEach(m => m.visible = false);
     });
     applySoilOpacity();
+    buildHoleMarkers();
 
     if (firstLoad) {
       modelBounds.setFromObject(root);
@@ -1051,6 +1123,7 @@ function buildLayerPanel() {
     cb.addEventListener('change', () => {
       hidden[c.id] = !cb.checked;
       groups[c.id].forEach(m => m.visible = cb.checked);
+      if (holeGroups[c.id]) holeGroups[c.id].visible = !cb.checked;
       row.classList.toggle('off', !cb.checked);
       row.querySelector('.eye').innerHTML = eyeIcon(cb.checked);
       updateLevelIntersection();

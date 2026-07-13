@@ -531,6 +531,16 @@ button.active { background: var(--accent); color: #1e1f22; border-color: var(--a
     margin-bottom: 12px;
   }
 
+  /* pull Soil X-ray (section 6) above the layer list on small screens */
+  #panel h1              { order: 1; }
+  .sub                   { order: 2; }
+  section:nth-of-type(6) { order: 3; }
+  section:nth-of-type(1) { order: 4; }
+  section:nth-of-type(2) { order: 5; }
+  section:nth-of-type(4) { order: 6; }
+  section:nth-of-type(5) { order: 7; }
+  .hint                  { order: 8; }
+
   .layer {
     min-height: 32px;
     padding: 6px 8px;
