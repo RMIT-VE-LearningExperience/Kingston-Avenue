@@ -941,9 +941,10 @@ const HOLE_RADIUS_SCALE = 1.03;  // slight oversize keeps the boolean numericall
 const HOLE_SEGMENTS = 24;
 
 // Which pile categories have been drilled by a given stage (manifest order):
-// SPW1 (RL 6.50) from stage 02 — CB1/SPW5+RTW1; every other pile wall and the
-// bored piers from stage 04 — CB1/SPW2+3. Stages 00–01 show no holes.
-const PILE_CATS = ['piers', 'spw_1', 'spw_2', 'spw_3', 'spw_4', 'spw_5', 'spw_wall'];
+// SPW1 (RL 6.50) from stage 02 — CB1/SPW5+RTW1; SPW5, the bored piers and the
+// legacy grouped walls from stage 04 — CB1/SPW2+3. Stages 00–01 show no holes.
+// SPW2/SPW3/SPW4 are deliberately excluded from hole carving.
+const PILE_CATS = ['piers', 'spw_1', 'spw_5', 'spw_wall'];
 function holeCatsForStage(idx) {
   if (idx >= 4) return PILE_CATS;
   if (idx >= 2) return ['spw_1'];
