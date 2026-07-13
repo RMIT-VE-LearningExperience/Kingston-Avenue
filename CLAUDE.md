@@ -44,7 +44,7 @@ When a pile layer's checkbox is off, its bore holes are carved out of the terrai
 - The cylinders for all hidden pile layers are merged into a single brush (piles never overlap, so a merge is a valid union) and subtracted in one `Evaluator.evaluate()` call; cut faces get a dark shaft-wall material. Results are cached per combination of hidden layers and rebuilt per stage.
 - Carved soil shares the original soil material instance, so the Soil X-ray slider keeps working on it. Carved meshes live under `vrWorld` (world-space geometry, identity transform outside VR) and are disposed on stage change — before `disposeRoot`, since they are not children of the stage root.
 - `buildLayerPanel()` re-applies mesh visibility when it rebuilds, so `applyTerrainHoles()` must run after it in `loadStage`.
-- Stage gating is by manifest index in `holeCatsForStage()`: `spw_1` (SPW1 RL 6.50) holes from stage 02 (CB1/SPW5+RTW1), all other pile categories from stage 04 (CB1/SPW2+3). Stages 00–01 get none. Categories suppressed by `STAGE_CATEGORY_EXCLUSIONS` never generate holes (they don't enter `groups`).
+- Stage gating is by manifest index in `holeCatsForStage()`: `spw_1` (SPW1 RL 6.50) holes from stage 02 (CB1/SPW5+RTW1); `spw_5`, `piers` and legacy `spw_wall` from stage 04 (CB1/SPW2+3). Stages 00–01 get none. `spw_2`/`spw_3`/`spw_4` are deliberately excluded from carving (not in `PILE_CATS`). Categories suppressed by `STAGE_CATEGORY_EXCLUSIONS` never generate holes (they don't enter `groups`).
 
 ### Deployment
 
