@@ -36,3 +36,21 @@ Meshes in the GLBs must have `userData.cat` set to one of: `soil`, `piers`, `spw
 ### Deployment
 
 GitHub Pages — push to `main`, the site deploys automatically from the repo root at `https://rmit-ve-learningexperience.github.io/Kingston-Avenue/`.
+
+---
+
+## Pending design questions — drilled hole markers feature
+
+The following questions need answers from the project owner before implementing "drilled hole" markers (small dark discs at pile-top positions that appear when pile geometry is hidden, matching reference screenshots of bore holes at ground level).
+
+**1. Hole visibility trigger**
+Should hole markers appear automatically whenever the pile-category layer checkbox (e.g. "SPW Pile Walls", "Bored Piers") is switched off in the Layers panel? Or should there be a separate, independent "Pile Holes" checkbox that's toggled on its own?
+
+**2. GLB export process**
+How are `models/*.glb` currently regenerated from `Kingston_v7.blend`? Is there a saved glTF export preset, or a manual process (toggle collection visibility per stage → File > Export glTF)? No export script was found stored inside the `.blend` file, so the exact settings are needed before re-exporting to avoid altering unrelated geometry or materials.
+
+**3. Hole appearance**
+Intended look: flat disc/cylinder matching the pile footprint diameter, sitting flush at the top face of where the pile currently starts, dark/recessed material. Does that match the reference screenshots, or is there a specific look to match exactly?
+
+**4. Real pile counts for verification**
+Some categories have far more mesh objects than physical piles (e.g. `spw_1` has 108 objects across 6 sub-collections — likely several segments per physical pile). Before generating hole geometry, a clustering pass needs to group segments into distinct pile positions. What is the expected pile count per wall (SPW1–SPW6, CB3 bored piers) from the structural drawings, so the clustering result can be verified?
