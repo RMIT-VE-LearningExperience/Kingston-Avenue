@@ -37,20 +37,12 @@ Meshes in the GLBs must have `userData.cat` set to one of: `soil`, `piers`, `spw
 
 GitHub Pages — push to `main`, the site deploys automatically from the repo root at `https://rmit-ve-learningexperience.github.io/Kingston-Avenue/`.
 
----
+### Drilled hole markers
 
-## Pending design questions — drilled hole markers feature
+`buildHoleMarkers()` in `main.js` generates bore-hole discs at pile positions, shown only while that pile layer's checkbox is off (per category, independently). Everything is derived from the loaded GLB at runtime — no data is hardcoded against the current exports, so re-exported models stay correct automatically:
 
-The following questions need answers from the project owner before implementing "drilled hole" markers (small dark discs at pile-top positions that appear when pile geometry is hidden, matching reference screenshots of bore holes at ground level).
-
-**1. Hole visibility trigger**
-Should hole markers appear automatically whenever the pile-category layer checkbox (e.g. "SPW Pile Walls", "Bored Piers") is switched off in the Layers panel? Or should there be a separate, independent "Pile Holes" checkbox that's toggled on its own?
-
-**2. GLB export process**
-How are `models/*.glb` currently regenerated from `Kingston_v7.blend`? Is there a saved glTF export preset, or a manual process (toggle collection visibility per stage → File > Export glTF)? No export script was found stored inside the `.blend` file, so the exact settings are needed before re-exporting to avoid altering unrelated geometry or materials.
-
-**3. Hole appearance**
-Intended look: flat disc/cylinder matching the pile footprint diameter, sitting flush at the top face of where the pile currently starts, dark/recessed material. Does that match the reference screenshots, or is there a specific look to match exactly?
-
-**4. Real pile counts for verification**
-Some categories have far more mesh objects than physical piles (e.g. `spw_1` has 108 objects across 6 sub-collections — likely several segments per physical pile). Before generating hole geometry, a clustering pass needs to group segments into distinct pile positions. What is the expected pile count per wall (SPW1–SPW6, CB3 bored piers) from the structural drawings, so the clustering result can be verified?
+- Pile meshes are clustered by XZ position (the GLBs contain exact duplicate meshes and multi-segment piles at the same spot; `HOLE_CLUSTER_DIST` merges them into one disc per physical pile).
+- Meshes with a footprint wider than `HOLE_MAX_FOOTPRINT` (1 m) are skipped — the pile categories also contain non-shaft geometry (a 7.5×15.6 m soil-cover block in `spw_wall`, a 2.1×14.4 m cap in `piers`).
+- Disc radius comes from each pile's own footprint (SPW ≈ 0.45–0.49 m, SPW4 ≈ 0.60 m, piers ≈ 0.30 m).
+- Disc Y = pile top, but a downward raycast against the soil meshes lifts the disc to the terrain surface when the pile top sits below it.
+- Stage gating is by manifest index in `holeCatsForStage()`: `spw_wall` holes from stage 02 (CB1/SPW5+RTW1), `piers` holes from stage 04 (CB1/SPW2+3). Stages 00–01 get none.
