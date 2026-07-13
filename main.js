@@ -3,6 +3,8 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
+import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
+import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
 
 // ---- eye icons (open = visible, closed = hidden) ----
 const EYE_OPEN = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
@@ -924,16 +926,19 @@ function disposeRoot(root) {
 }
 
 // ---- drilled hole markers ----
-// Bore-hole discs shown at each pile position when that pile layer is hidden,
-// illustrating the holes drilled before the piles were cast. Positions, tops
-// and radii are derived from the pile meshes themselves, so re-exported GLBs
-// stay correct automatically.
-let holeGroups = {};             // cat -> THREE.Group of discs
-const holeMat = new THREE.MeshStandardMaterial({ color: 0x3a3b3e, roughness: 0.95 });
+// When a pile layer is hidden, its bore holes are carved out of the terrain
+// as true negatives: the soil mesh is CSG-subtracted with a cylinder per pile
+// (three-bvh-csg) and swapped in, so you see real voids with dark shaft walls.
+// Positions, radii and depths are derived from the pile meshes themselves, so
+// re-exported GLBs stay correct automatically.
+let holeClusters = {};           // cat -> [{x, z, top, bot, r}] one per physical pile
+let soilSwaps = [];              // [{ mesh, carved: Map<key, carvedMesh> }] per soil mesh
+const holeWallMat = new THREE.MeshStandardMaterial({ color: 0x2e2f32, roughness: 1.0, side: THREE.DoubleSide });
+const csgEvaluator = new Evaluator();
 const HOLE_MAX_FOOTPRINT = 1.0;  // meshes wider than this are caps/soil covers, not pile shafts
 const HOLE_CLUSTER_DIST = 0.45;  // merge duplicate/segmented meshes within this XZ distance
-const HOLE_RADIUS_SCALE = 1.15;  // discs slightly wider than the pile so they read at a distance
-const HOLE_THICKNESS = 0.06;
+const HOLE_RADIUS_SCALE = 1.03;  // slight oversize keeps the boolean numerically robust
+const HOLE_SEGMENTS = 24;
 
 // Which pile categories have been drilled by a given stage (manifest order):
 // SPW1 (RL 6.50) from stage 02 — CB1/SPW5+RTW1; every other pile wall and the
@@ -946,50 +951,88 @@ function holeCatsForStage(idx) {
 }
 
 function disposeHoleMarkers() {
-  Object.values(holeGroups).forEach(g => {
-    g.children.forEach(d => d.geometry.dispose());
-    g.parent?.remove(g);
+  soilSwaps.forEach(s => {
+    s.carved.forEach(m => { m.geometry.dispose(); m.parent?.remove(m); });
+    if (s.mesh) s.mesh.visible = !hidden.soil;
   });
-  holeGroups = {};
+  soilSwaps = [];
+  holeClusters = {};
 }
 
-function buildHoleMarkers() {
-  disposeHoleMarkers();
-  const raycaster = new THREE.Raycaster();
-  const down = new THREE.Vector3(0, -1, 0);
+// One entry per physical pile: cluster mesh centres in XZ (the GLBs contain
+// duplicate meshes and multi-segment piles at the same spot).
+function computeHoleClusters() {
+  holeClusters = {};
   const box = new THREE.Box3();
   holeCatsForStage(stageIndex).forEach(cat => {
-    // one entry per physical pile: cluster mesh centres in XZ (the GLBs
-    // contain duplicate meshes and multi-segment piles at the same spot)
     const clusters = [];
     (groups[cat] || []).forEach(m => {
       box.setFromObject(m);
       const dx = box.max.x - box.min.x, dz = box.max.z - box.min.z;
       if (Math.max(dx, dz) > HOLE_MAX_FOOTPRINT) return;
       const p = { x: (box.min.x + box.max.x) / 2, z: (box.min.z + box.max.z) / 2,
-                  top: box.max.y, r: Math.max(dx, dz) / 2 };
+                  top: box.max.y, bot: box.min.y, r: Math.max(dx, dz) / 2 };
       const c = clusters.find(c => (c.x - p.x) ** 2 + (c.z - p.z) ** 2 < HOLE_CLUSTER_DIST ** 2);
-      if (c) { c.top = Math.max(c.top, p.top); c.r = Math.max(c.r, p.r); }
+      if (c) { c.top = Math.max(c.top, p.top); c.bot = Math.min(c.bot, p.bot); c.r = Math.max(c.r, p.r); }
       else clusters.push(p);
     });
-    if (!clusters.length) return;
-    const group = new THREE.Group();
-    clusters.forEach(c => {
-      // if the pile top sits below the terrain surface, lift the disc up to
-      // the soil so the hole still shows on the ground
-      let y = c.top;
-      raycaster.set(new THREE.Vector3(c.x, 1000, c.z), down);
-      const hit = raycaster.intersectObjects(groups.soil || [], false)[0];
-      if (hit && hit.point.y > y) y = hit.point.y;
-      const r = c.r * HOLE_RADIUS_SCALE;
-      const disc = new THREE.Mesh(new THREE.CylinderGeometry(r, r, HOLE_THICKNESS, 24), holeMat);
-      // cluster coords are world-space; discs live under vrWorld
-      disc.position.copy(vrWorld.worldToLocal(new THREE.Vector3(c.x, y + HOLE_THICKNESS / 2, c.z)));
-      group.add(disc);
-    });
-    group.visible = !!hidden[cat];  // holes show only while the pile layer is off
-    vrWorld.add(group);
-    holeGroups[cat] = group;
+    if (clusters.length) holeClusters[cat] = clusters;
+  });
+  soilSwaps = (groups.soil || []).map(mesh => ({ mesh, carved: new Map() }));
+}
+
+// Merge the cutting cylinders for the given categories into one brush geometry
+// (piles never overlap each other, so a plain merge is a valid union).
+function buildCutterGeometry(cats) {
+  const raycaster = new THREE.Raycaster();
+  const down = new THREE.Vector3(0, -1, 0);
+  const geos = [];
+  cats.forEach(cat => (holeClusters[cat] || []).forEach(c => {
+    // carve from the terrain surface (or the pile top, whichever is higher)
+    // down to the pile toe, so buried pile tops still read as surface holes
+    let top = c.top;
+    raycaster.set(new THREE.Vector3(c.x, 1000, c.z), down);
+    const hit = raycaster.intersectObjects(groups.soil || [], false)[0];
+    if (hit && hit.point.y > top) top = hit.point.y;
+    top += 0.5;                      // overshoot above the surface for a clean cut
+    const h = top - c.bot;
+    if (h <= 0) return;
+    const g = new THREE.CylinderGeometry(c.r * HOLE_RADIUS_SCALE, c.r * HOLE_RADIUS_SCALE, h, HOLE_SEGMENTS);
+    g.translate(c.x, (top + c.bot) / 2, c.z);
+    geos.push(g);
+  }));
+  if (!geos.length) return null;
+  const merged = BufferGeometryUtils.mergeGeometries(geos);
+  geos.forEach(g => g.dispose());
+  return merged;
+}
+
+// Show the soil with holes for every currently-hidden pile layer (cached per
+// combination). With no pile layer hidden the original soil is restored.
+function applyTerrainHoles() {
+  const activeCats = holeCatsForStage(stageIndex)
+    .filter(cat => hidden[cat] && holeClusters[cat]?.length).sort();
+  const key = activeCats.join(',');
+  soilSwaps.forEach(s => {
+    s.carved.forEach(m => { m.visible = false; });
+    if (!key) { s.mesh.visible = !hidden.soil; return; }
+    let carved = s.carved.get(key);
+    if (!carved) {
+      const cutter = buildCutterGeometry(activeCats);
+      if (!cutter) { s.mesh.visible = !hidden.soil; return; }
+      const soilBrush = new Brush(s.mesh.geometry, s.mesh.material);
+      s.mesh.matrixWorld.decompose(soilBrush.position, soilBrush.quaternion, soilBrush.scale);
+      soilBrush.updateMatrixWorld(true);
+      const cutBrush = new Brush(cutter, holeWallMat);   // cutter is world-space
+      cutBrush.updateMatrixWorld(true);
+      carved = csgEvaluator.evaluate(soilBrush, cutBrush, SUBTRACTION);
+      cutter.dispose();
+      // result is world-space; parent under vrWorld so VR transforms apply
+      vrWorld.add(carved);
+      s.carved.set(key, carved);
+    }
+    carved.visible = !hidden.soil;
+    s.mesh.visible = false;
   });
 }
 
@@ -1003,6 +1046,7 @@ function loadStage(idx) {
   loadingEl.style.display = 'flex';
 
   loader.load(bust(stage.file), (gltf) => {
+    disposeHoleMarkers();   // carved soil lives under vrWorld, not the stage root
     if (currentRoot) disposeRoot(currentRoot);
     groups = {}; soilMats = [];
     CATEGORIES.forEach(c => groups[c.id] = []);
@@ -1032,7 +1076,6 @@ function loadStage(idx) {
       if (hidden[cat]) groups[cat].forEach(m => m.visible = false);
     });
     applySoilOpacity();
-    buildHoleMarkers();
 
     if (firstLoad) {
       modelBounds.setFromObject(root);
@@ -1044,7 +1087,9 @@ function loadStage(idx) {
     const newCats = new Set([...curCats].filter(id => !prevStageCats.has(id)));
     prevStageCats = curCats;
     introReveal(newCats);
-    buildLayerPanel();
+    buildLayerPanel();   // panel build re-applies mesh visibility, so carve after it
+    computeHoleClusters();
+    applyTerrainHoles();
     updateExcavatorForStage();
     updateLevelIntersection();
     loadingEl.style.display = 'none';
@@ -1123,7 +1168,7 @@ function buildLayerPanel() {
     cb.addEventListener('change', () => {
       hidden[c.id] = !cb.checked;
       groups[c.id].forEach(m => m.visible = cb.checked);
-      if (holeGroups[c.id]) holeGroups[c.id].visible = !cb.checked;
+      if (PILE_CATS.includes(c.id) || c.id === 'soil') applyTerrainHoles();
       row.classList.toggle('off', !cb.checked);
       row.querySelector('.eye').innerHTML = eyeIcon(cb.checked);
       updateLevelIntersection();
