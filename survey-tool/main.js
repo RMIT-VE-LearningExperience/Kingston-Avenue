@@ -222,6 +222,34 @@ levelCtrl.addEventListener('objectChange', updateLevelReadout);
 levelCtrl.visible = false;
 scene.add(levelCtrl);
 
+// ---- transform gizmo for placing the surveyor tripod on the terrain ----
+// Translate is XZ-only; Y is continuously snapped to the ground surface below
+// so the tripod's feet always sit on the terrain as it's dragged. Rotate is
+// Y-axis only (heading) — the model is rigid, it doesn't adapt to slope.
+const tripodGizmo = new TransformControls(camera, renderer.domElement);
+tripodGizmo.addEventListener('dragging-changed', (e) => { controls.enabled = !e.value; });
+tripodGizmo.addEventListener('objectChange', () => snapToTerrain(tripodGizmo.object));
+tripodGizmo.visible = false;
+scene.add(tripodGizmo);
+
+function setTripodGizmoMode(mode) {
+  tripodGizmo.setMode(mode);
+  tripodGizmo.showY = (mode !== 'translate');           // translate: XZ only
+  tripodGizmo.showX = tripodGizmo.showZ = (mode !== 'rotate');  // rotate: Y only
+  document.getElementById('tripodMove').classList.toggle('active', mode === 'translate');
+  document.getElementById('tripodRotate').classList.toggle('active', mode === 'rotate');
+}
+
+// raycast straight down onto the soil meshes and drop the object's Y to the
+// hit point, so it always rests on the current terrain surface
+function snapToTerrain(obj) {
+  if (!obj || !groups.soil || !groups.soil.length) return;
+  const raycaster = new THREE.Raycaster();
+  raycaster.set(new THREE.Vector3(obj.position.x, 1000, obj.position.z), new THREE.Vector3(0, -1, 0));
+  const hit = raycaster.intersectObjects(groups.soil, false)[0];
+  if (hit) obj.position.y = hit.point.y;
+}
+
 let levelActive = false, levelInit = false;
 // ---- building/slab footprint outline that rides on the level plane ----
 // Points are the concrete-slab perimeter in gltf X/Z (from the model's Slab).
@@ -638,7 +666,7 @@ const hidden = {};        // cat -> bool (persist layer visibility across stages
 const STAGE_CATEGORY_EXCLUSIONS = {};
 
 // bump ASSET_V whenever model .glb files change, so browsers fetch the new ones
-const ASSET_V = '23';
+const ASSET_V = '24';
 const bust = (url) => url + (url.includes('?') ? '&' : '?') + 'v=' + ASSET_V;
 
 const loader = new GLTFLoader();
@@ -649,6 +677,7 @@ const loadingEl = document.getElementById('loading');
 
 // ---- overlays (lazy-loaded once, persist across stages) ----
 const EXCAVATOR_FILE = 'models/excavator.glb';
+const TRIPOD_FILE = 'models/tripod.glb';
 const overlayRoots = {};   // file -> gltf scene
 const overlayOn = {};      // file -> user wants it on
 
@@ -857,6 +886,35 @@ document.getElementById('gizmoMove').addEventListener('click', () => setGizmoMod
 document.getElementById('gizmoRotate').addEventListener('click', () => setGizmoMode('rotate'));
 setGizmoMode('translate');
 
+// ---- tripod move/rotate gizmo wiring ----
+let tripodGizmoActive = false;
+function refreshTripodGizmoAttachment() {
+  const root = overlayRoots[TRIPOD_FILE];
+  if (tripodGizmoActive && root && root.visible) {
+    tripodGizmo.attach(root); tripodGizmo.visible = true;
+  } else {
+    tripodGizmo.detach(); tripodGizmo.visible = false;
+  }
+}
+document.getElementById('tripodGizmoToggle').addEventListener('click', () => {
+  tripodGizmoActive = !tripodGizmoActive;
+  if (tripodGizmoActive) autoRotateCamera = false;
+  const btn = document.getElementById('tripodGizmoToggle');
+  btn.classList.toggle('active', tripodGizmoActive);
+  btn.textContent = tripodGizmoActive ? 'Disable Move/Rotate' : 'Enable Move/Rotate';
+  // make sure the tripod is loaded + visible, placed on the terrain the first time
+  if (tripodGizmoActive) {
+    const cb = document.querySelector('.overlay-row[data-file="' + TRIPOD_FILE + '"] input');
+    if (cb && !cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change')); }
+    else refreshTripodGizmoAttachment();
+  } else {
+    refreshTripodGizmoAttachment();
+  }
+});
+document.getElementById('tripodMove').addEventListener('click', () => setTripodGizmoMode('translate'));
+document.getElementById('tripodRotate').addEventListener('click', () => setTripodGizmoMode('rotate'));
+setTripodGizmoMode('translate');
+
 function setLevelActive(on) {
   levelActive = on;
   if (levelActive) { autoRotateCamera = false; sizeLevelPlane(); levelCtrl.attach(levelPlane); }
@@ -905,10 +963,22 @@ document.querySelectorAll('.overlay-row').forEach(row => {
         vrWorld.add(g.scene);
         loadingEl.style.display = 'none';
         if (file === EXCAVATOR_FILE) updateExcavatorForStage();
+        if (file === TRIPOD_FILE) {
+          // drop it at the centre of the terrain on first load, not world origin
+          if (groups.soil && groups.soil.length) {
+            const soilBox = new THREE.Box3();
+            groups.soil.forEach(m => soilBox.expandByObject(m));
+            const c = soilBox.getCenter(new THREE.Vector3());
+            g.scene.position.set(c.x, g.scene.position.y, c.z);
+          }
+          snapToTerrain(g.scene);
+          refreshTripodGizmoAttachment();
+        }
       }, undefined, (err) => { loadingEl.textContent = 'Overlay failed: ' + err; });
     } else if (overlayRoots[file]) {
       overlayRoots[file].visible = on;
       if (file === EXCAVATOR_FILE) updateExcavatorForStage();
+      if (file === TRIPOD_FILE) refreshTripodGizmoAttachment();
     }
   });
 });
