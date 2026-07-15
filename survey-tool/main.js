@@ -554,10 +554,10 @@ slabOutline.add(fillMesh);
 const boundaryLine = new THREE.LineLoop(
   new THREE.BufferGeometry(),
   new THREE.LineDashedMaterial({ color: 0xe8e8ea, dashSize: 0.7, gapSize: 0.35,
-                                 transparent: true, opacity: 0.95 })
+                                 transparent: true, opacity: 0.95, depthTest: false })
 );
 boundaryLine.visible = false;
-boundaryLine.renderOrder = 15;
+boundaryLine.renderOrder = 20;   // depthTest off: visible inside the terrain
 scene.add(boundaryLine);
 
 function buildBoundaryOutline() {
@@ -641,14 +641,16 @@ function buildSetoutGrid(hull) {
   const slabMaxZ = Math.max(...SLAB_FOOTPRINT.map(q => q[1]));
   const M = 1.5;                   // bubble margin beyond the building line
   const mat = () => new THREE.LineDashedMaterial({ color: 0xbfc2c7, dashSize: 0.45, gapSize: 0.3,
-                                                   transparent: true, opacity: 0.85 });
+                                                   transparent: true, opacity: 0.85, depthTest: false });
   const addLine = (p1, p2, label) => {
     const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([p1, p2]), mat());
     line.computeLineDistances();
+    line.renderOrder = 20;         // depthTest off: visible inside the terrain
     gridGroup.add(line);
     for (const end of [p1, p2]) {
       const b = makeGridBubble(label);
       b.position.copy(end);
+      b.renderOrder = 21;
       gridGroup.add(b);
     }
   };
