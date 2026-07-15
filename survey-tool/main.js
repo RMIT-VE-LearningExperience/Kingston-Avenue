@@ -460,6 +460,53 @@ staffGizmo.addEventListener('objectChange', () => { keepOnTerrain(staffs[staffMo
 staffGizmo.visible = false;
 scene.add(staffGizmo);
 
+// ---- telescope (scope) view: read the staff through the instrument ----
+// A circular inset renders the scene from the instrument's optical axis,
+// aimed horizontally at the selected staff. The crosshair sits exactly at
+// sight height, so students read the E-pattern value themselves. Out of
+// range = the scope shows dirt or sky.
+const scopeCamera = new THREE.PerspectiveCamera(3, 1, 0.05, 500);
+let scopeSel = -1;
+const SCOPE_SIZE = 280, SCOPE_RIGHT = 64, SCOPE_TOP = 120;
+
+function selectScope(i) {
+  scopeSel = (scopeSel === i) ? -1 : i;
+  for (let k = 0; k < STAFF_COUNT; k++)
+    document.getElementById('staffScope' + k).classList.toggle('active', k === scopeSel);
+  document.getElementById('scopeView').style.display = scopeSel >= 0 ? 'block' : 'none';
+  if (scopeSel >= 0) { autoRotateCamera = false; if (!staffOn) setStaffsVisible(true); }
+}
+
+function renderScopeInset() {
+  if (scopeSel < 0) return;
+  const t = overlayRoots[TRIPOD_FILE];
+  const st = staffs[scopeSel];
+  if (!t || !t.visible || !st || !st.visible) return;
+  const sightY = t.position.y + instrumentTop;
+  const dist = Math.hypot(st.position.x - t.position.x, st.position.z - t.position.z);
+  if (dist < 0.5) return;
+  scopeCamera.position.set(t.position.x, sightY, t.position.z);
+  scopeCamera.lookAt(st.position.x, sightY, st.position.z);
+  // frame ~0.6 m of staff whatever the distance (auto "magnification")
+  scopeCamera.fov = THREE.MathUtils.clamp(2 * Math.atan(0.30 / dist) * 180 / Math.PI, 0.4, 25);
+  scopeCamera.updateProjectionMatrix();
+  // the sight marker/line would cover the reading — hide during this pass
+  const vis = sightLines.map(l => l.visible);
+  const mvis = sightMarks.map(m => m.visible);
+  sightLines.forEach(l => l.visible = false);
+  sightMarks.forEach(m => m.visible = false);
+  const gx = viewport.clientWidth - SCOPE_SIZE - SCOPE_RIGHT;
+  const gy = viewport.clientHeight - SCOPE_TOP - SCOPE_SIZE;
+  renderer.clearDepth();
+  renderer.setScissor(gx, gy, SCOPE_SIZE, SCOPE_SIZE);
+  renderer.setViewport(gx, gy, SCOPE_SIZE, SCOPE_SIZE);
+  renderer.setScissorTest(true);
+  renderer.render(scene, scopeCamera);
+  renderer.setScissorTest(false);
+  sightLines.forEach((l, i) => l.visible = vis[i]);
+  sightMarks.forEach((m, i) => m.visible = mvis[i]);
+}
+
 let levelActive = false, levelInit = false;
 // ---- building/slab footprint outline that rides on the level plane ----
 // Points are the concrete-slab perimeter in gltf X/Z (from the model's Slab).
@@ -1206,6 +1253,8 @@ function selectStaffMove(i) {
 document.getElementById('staffToggle').addEventListener('click', () => setStaffsVisible(!staffOn));
 document.getElementById('staffMove0').addEventListener('click', () => selectStaffMove(0));
 document.getElementById('staffMove1').addEventListener('click', () => selectStaffMove(1));
+document.getElementById('staffScope0').addEventListener('click', () => selectScope(0));
+document.getElementById('staffScope1').addEventListener('click', () => selectScope(1));
 
 function setLevelActive(on) {
   levelActive = on;
@@ -1849,5 +1898,6 @@ function animate() {
   renderer.setScissorTest(true);
   renderer.render(viewGizmoScene, viewGizmoCamera);
   renderer.setScissorTest(false);
+  renderScopeInset();
 }
 renderer.setAnimationLoop(animate);
