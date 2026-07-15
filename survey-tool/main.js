@@ -229,8 +229,9 @@ scene.add(levelCtrl);
 const tripodGizmo = new TransformControls(camera, renderer.domElement);
 tripodGizmo.addEventListener('dragging-changed', (e) => { controls.enabled = !e.value; });
 tripodGizmo.addEventListener('objectChange', () => {
-  snapToTerrain(tripodGizmo.object);
-  enforceSightRule('tripod');
+  keepOnTerrain(tripodGizmo.object);
+  faceStaffsToInstrument();
+  updateSightVisuals();
 });
 tripodGizmo.visible = false;
 scene.add(tripodGizmo);
@@ -244,27 +245,43 @@ function setTripodGizmoMode(mode) {
 }
 
 // raycast straight down onto the soil meshes and drop the object's Y to the
-// hit point, so it always rests on the current terrain surface
+// hit point, so it always rests on the current terrain surface; returns
+// whether there was ground below at all
 function snapToTerrain(obj) {
-  if (!obj || !groups.soil || !groups.soil.length) return;
+  if (!obj || !groups.soil || !groups.soil.length) return false;
   const raycaster = new THREE.Raycaster();
   raycaster.set(new THREE.Vector3(obj.position.x, 1000, obj.position.z), new THREE.Vector3(0, -1, 0));
   const hit = raycaster.intersectObjects(groups.soil, false)[0];
   if (hit) obj.position.y = hit.point.y;
+  return !!hit;
 }
 
-// ---- levelling staff (3 m E-pattern staff) + line-of-sight rule ----
+// keep a dragged object on the site: if the drag left the terrain entirely,
+// put it back on the last spot that had ground underneath
+const lastGroundPos = new Map();
+function keepOnTerrain(obj) {
+  if (!obj) return;
+  if (snapToTerrain(obj)) lastGroundPos.set(obj, obj.position.clone());
+  else if (lastGroundPos.has(obj)) obj.position.copy(lastGroundPos.get(obj));
+}
+
+// ---- levelling staff (3 m E-pattern staff) + line-of-sight readout ----
 // The dumpy level sights along a horizontal line at the instrument top. The
 // staff is readable only while that line crosses it: staff base <= sight
-// height <= staff base + 3 m. Dragging either one is clamped so the pair can
-// never be moved out of each other's sight.
+// height <= staff base + 3 m. Staff and level move fully independently —
+// students discover the staff is out of range and relocate the level
+// themselves (differential levelling practice). The panel and sight line
+// report readable vs out-of-range; nothing is clamped.
 const STAFF_HEIGHT = 3.0;
-let surveyGearShown = false;      // dumpy level + staff auto-shown on first stage load
+const STAFF_COUNT = 2;
+const STAFF_COLORS = [0xd98a3d, 0x4a8db0];   // staff 1 orange, staff 2 blue (cap + foot)
+let surveyGearShown = false;      // dumpy level + staffs auto-shown on first stage load
 let instrumentTop = 1.70;         // model ground->top; measured from the GLB on load
-let staffRoot = null;             // group, base at local Y=0
+let staffs = [];                  // groups, base at local Y=0
 let staffOn = false;
-let staffGizmoActive = false;
-const lastValidPos = { staff: null, tripod: null };
+let staffsPlaced = false;         // first-show placement done
+let staffMoveSel = -1;            // which staff the move gizmo drives (-1 = none)
+let staffAutoShowPending = false; // show staffs once the instrument has loaded
 
 function makeStaffTexture(mirror) {
   const PXM = 512;                // pixels per metre
@@ -294,115 +311,152 @@ function makeStaffTexture(mirror) {
   return tex;
 }
 
-function ensureStaff() {
-  if (staffRoot) return staffRoot;
-  staffRoot = new THREE.Group();
-  const alu = new THREE.MeshStandardMaterial({ color: 0xd8d8d2, roughness: 0.5, metalness: 0.4 });
-  const face = (mirror) => new THREE.MeshStandardMaterial({ map: makeStaffTexture(mirror), roughness: 0.85 });
-  const body = new THREE.Mesh(
-    new THREE.BoxGeometry(0.10, STAFF_HEIGHT, 0.025),
-    [alu, alu, alu, alu, face(false), face(true)]
-  );
-  body.position.y = STAFF_HEIGHT / 2;
-  staffRoot.add(body);
-  const foot = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.02, 0.06), alu);
-  foot.position.y = 0.01;
-  staffRoot.add(foot);
-  staffRoot.visible = false;
-  vrWorld.add(staffRoot);
-  return staffRoot;
+function ensureStaffs() {
+  if (staffs.length) return staffs;
+  for (let i = 0; i < STAFF_COUNT; i++) {
+    const root = new THREE.Group();
+    const alu = new THREE.MeshStandardMaterial({ color: 0xd8d8d2, roughness: 0.5, metalness: 0.4 });
+    const tint = new THREE.MeshStandardMaterial({ color: STAFF_COLORS[i], roughness: 0.6 });
+    const face = (mirror) => new THREE.MeshStandardMaterial({ map: makeStaffTexture(mirror), roughness: 0.85 });
+    const body = new THREE.Mesh(
+      new THREE.BoxGeometry(0.10, STAFF_HEIGHT, 0.025),
+      [alu, alu, alu, alu, face(false), face(true)]
+    );
+    body.position.y = STAFF_HEIGHT / 2;
+    root.add(body);
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.07, 0.05), tint);
+    cap.position.y = STAFF_HEIGHT + 0.035;   // coloured cap tells the staffs apart
+    root.add(cap);
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.02, 0.06), tint);
+    foot.position.y = 0.01;
+    root.add(foot);
+    root.visible = false;
+    vrWorld.add(root);
+    staffs.push(root);
+  }
+  return staffs;
 }
 
-// dashed horizontal sight line from the instrument to the staff, with a
+// dashed horizontal sight line from the instrument to each staff, with a
 // marker where it crosses the staff (= the reading)
-const sightLine = new THREE.Line(
-  new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
-  new THREE.LineDashedMaterial({ color: 0xffcc44, dashSize: 0.35, gapSize: 0.2,
-                                 transparent: true, opacity: 0.9 })
-);
-sightLine.visible = false;
-vrWorld.add(sightLine);
-const sightMark = new THREE.Mesh(new THREE.SphereGeometry(0.045, 16, 12),
-                                 new THREE.MeshBasicMaterial({ color: 0xffcc44 }));
-sightMark.visible = false;
-vrWorld.add(sightMark);
+const sightLines = [], sightMarks = [];
+for (let i = 0; i < STAFF_COUNT; i++) {
+  const line = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
+    new THREE.LineDashedMaterial({ color: 0xffcc44, dashSize: 0.35, gapSize: 0.2,
+                                   transparent: true, opacity: 0.9 })
+  );
+  line.visible = false;
+  vrWorld.add(line);
+  sightLines.push(line);
+  const mark = new THREE.Mesh(new THREE.SphereGeometry(0.045, 16, 12),
+                              new THREE.MeshBasicMaterial({ color: 0xffcc44 }));
+  mark.visible = false;
+  vrWorld.add(mark);
+  sightMarks.push(mark);
+}
 
-function sightState() {
+function sightState(i) {
   const t = overlayRoots[TRIPOD_FILE];
-  if (!t || !t.visible || !staffRoot || !staffRoot.visible) return null;
+  const s = staffs[i];
+  if (!t || !t.visible || !s || !s.visible) return null;
   const sightY = t.position.y + instrumentTop;
-  const base = staffRoot.position.y;
-  return { t, sightY, base, ok: base <= sightY && sightY <= base + STAFF_HEIGHT };
+  const base = s.position.y;
+  return { t, s, sightY, base, ok: base <= sightY && sightY <= base + STAFF_HEIGHT };
 }
 
 function updateSightVisuals() {
-  const st = sightState();
   const status = document.getElementById('staffStatus');
-  if (!st) {
-    sightLine.visible = sightMark.visible = false;
-    if (status) status.textContent = 'Staff reading: —';
-    return;
+  const lines = [];
+  for (let i = 0; i < STAFF_COUNT; i++) {
+    const st = sightState(i);
+    if (!st) {
+      sightLines[i].visible = sightMarks[i].visible = false;
+      lines.push('Staff ' + (i + 1) + ': —');
+      continue;
+    }
+    sightLines[i].geometry.setFromPoints([
+      new THREE.Vector3(st.t.position.x, st.sightY, st.t.position.z),
+      new THREE.Vector3(st.s.position.x, st.sightY, st.s.position.z)]);
+    sightLines[i].computeLineDistances();
+    sightLines[i].visible = true;
+    sightLines[i].material.color.set(st.ok ? 0xffcc44 : 0xff4444);
+    sightMarks[i].position.set(st.s.position.x, st.sightY, st.s.position.z);
+    sightMarks[i].visible = st.ok;
+    if (st.ok) {
+      lines.push('Staff ' + (i + 1) + ': ' + (st.sightY - st.base).toFixed(3) + ' m');
+    } else if (st.sightY > st.base + STAFF_HEIGHT) {
+      lines.push('Staff ' + (i + 1) + ': out of range — sight above staff (move level lower)');
+    } else {
+      lines.push('Staff ' + (i + 1) + ': out of range — sight below staff base (move level higher)');
+    }
   }
-  sightLine.geometry.setFromPoints([
-    new THREE.Vector3(st.t.position.x, st.sightY, st.t.position.z),
-    new THREE.Vector3(staffRoot.position.x, st.sightY, staffRoot.position.z)]);
-  sightLine.computeLineDistances();
-  sightLine.visible = true;
-  sightMark.position.set(staffRoot.position.x, st.sightY, staffRoot.position.z);
-  sightMark.visible = true;
-  if (status) status.textContent = 'Staff reading: ' + (st.sightY - st.base).toFixed(3) + ' m';
+  if (status) status.innerHTML = lines.join('<br>');
 }
 
-// the staff face always turns toward the instrument, like a staffman would hold it
-function faceStaffToInstrument() {
+// every staff face turns toward the instrument, like a staffman would hold it
+function faceStaffsToInstrument() {
   const t = overlayRoots[TRIPOD_FILE];
-  if (t && staffRoot) staffRoot.lookAt(t.position.x, staffRoot.position.y, t.position.z);
+  if (!t) return;
+  staffs.forEach(s => s.lookAt(t.position.x, s.position.y, t.position.z));
 }
 
-// drag clamp: when a drag breaks the sight rule, snap the dragged object back
-// to its last valid spot so the pair stays within sight of each other
-function enforceSightRule(which) {
-  const st = sightState();
-  if (!st) return;
-  if (st.ok) {
-    lastValidPos.staff = staffRoot.position.clone();
-    lastValidPos.tripod = st.t.position.clone();
-  } else {
-    const obj = which === 'staff' ? staffRoot : st.t;
-    if (lastValidPos[which]) obj.position.copy(lastValidPos[which]);
-  }
-  faceStaffToInstrument();
-  updateSightVisuals();
+// terrain height probe at XZ (null when off the site)
+function terrainYAt(x, z) {
+  if (!groups.soil || !groups.soil.length) return null;
+  const ray = new THREE.Raycaster();
+  ray.set(new THREE.Vector3(x, 1000, z), new THREE.Vector3(0, -1, 0));
+  const hit = ray.intersectObjects(groups.soil, false)[0];
+  return hit ? hit.point.y : null;
 }
 
-// for non-drag causes (stage change, toggling things on): if the rule is
-// broken, bring the staff back into the instrument's vicinity
-function ensureSightPair() {
-  const st = sightState();
-  if (st && !st.ok) placeStaffNearInstrument();
-  else if (st) { lastValidPos.staff = staffRoot.position.clone(); lastValidPos.tripod = st.t.position.clone(); }
-  faceStaffToInstrument();
-  updateSightVisuals();
-}
-
-function placeStaffNearInstrument() {
-  ensureStaff();
+// initial placement only: staff 1 on high ground, staff 2 on low ground,
+// probing rings around the instrument — after this they are never moved
+// automatically
+function placeStaffsDefault() {
+  ensureStaffs();
   const t = overlayRoots[TRIPOD_FILE];
-  if (t) staffRoot.position.set(t.position.x + 4, t.position.y, t.position.z);
+  let cx, cz;
+  if (t) { cx = t.position.x; cz = t.position.z; }
   else if (groups.soil && groups.soil.length) {
     const b = new THREE.Box3(); groups.soil.forEach(m => b.expandByObject(m));
     const c = b.getCenter(new THREE.Vector3());
-    staffRoot.position.set(c.x + 4, 0, c.z);
+    cx = c.x; cz = c.z;
+  } else { cx = 0; cz = 0; }
+  const samples = [];
+  for (const r of [6, 9, 12, 15]) {
+    for (let k = 0; k < 24; k++) {
+      const a = (k / 24) * Math.PI * 2;
+      const x = cx + r * Math.cos(a), z = cz + r * Math.sin(a);
+      const y = terrainYAt(x, z);
+      if (y !== null) samples.push({ x, y, z });
+    }
   }
-  snapToTerrain(staffRoot);
-  lastValidPos.staff = staffRoot.position.clone();
+  // prefer the highest / lowest spots that are still comfortably readable
+  // from the instrument (>= 0.3 m from either end of the staff), so both
+  // start with valid readings near the limits of the sight window
+  const sightY = t ? t.position.y + instrumentTop : null;
+  let highPool = samples, lowPool = samples;
+  if (sightY !== null) {
+    const h = samples.filter(q => q.y <= sightY - 0.3);
+    const l = samples.filter(q => q.y >= sightY - (STAFF_HEIGHT - 0.3));
+    if (h.length) highPool = h;
+    if (l.length) lowPool = l;
+  }
+  const high = highPool.reduce((a, b) => (!a || b.y > a.y) ? b : a, null);
+  const low = lowPool.reduce((a, b) => (!a || b.y < a.y) ? b : a, null);
+  if (high) staffs[0].position.set(high.x, high.y, high.z);
+  else staffs[0].position.set(cx + 4, 0, cz);
+  if (low) staffs[1].position.set(low.x, low.y, low.z);
+  else staffs[1].position.set(cx - 4, 0, cz);
+  staffs.forEach(s => snapToTerrain(s));
 }
 
 const staffGizmo = new TransformControls(camera, renderer.domElement);
 staffGizmo.setMode('translate');
 staffGizmo.showY = false;                        // XZ drag; Y follows the terrain
 staffGizmo.addEventListener('dragging-changed', (e) => { controls.enabled = !e.value; });
-staffGizmo.addEventListener('objectChange', () => { snapToTerrain(staffRoot); enforceSightRule('staff'); });
+staffGizmo.addEventListener('objectChange', () => { keepOnTerrain(staffs[staffMoveSel]); faceStaffsToInstrument(); updateSightVisuals(); });
 staffGizmo.visible = false;
 scene.add(staffGizmo);
 
@@ -430,6 +484,52 @@ const fillMesh = new THREE.Mesh(
   new THREE.MeshBasicMaterial({ color: 0x8fd0ec, transparent: true, opacity: 0.08, side: THREE.DoubleSide, depthWrite: false, depthTest: false }));
 fillMesh.rotation.x = Math.PI / 2;
 slabOutline.add(fillMesh);
+
+// ---- title boundary outline (dash-dot, rides the level plane) ----
+// The modeled terrain block is cut along the title boundary on its straight
+// sides (drawing A.02: east 16.76 m @135°, south 33.53 m @225°, north
+// 29.57 m + 111.46 m @45°), so the XZ convex hull of the soil mesh IS the
+// boundary line around the modeled part of the site.
+const boundaryLine = new THREE.LineLoop(
+  new THREE.BufferGeometry(),
+  new THREE.LineDashedMaterial({ color: 0xe8e8ea, dashSize: 0.7, gapSize: 0.35,
+                                 transparent: true, opacity: 0.95 })
+);
+boundaryLine.visible = false;
+boundaryLine.renderOrder = 15;
+scene.add(boundaryLine);
+
+function buildBoundaryOutline() {
+  if (!groups.soil || !groups.soil.length) return;
+  const pts = [];
+  const v = new THREE.Vector3();
+  groups.soil.forEach(m => {
+    const pos = m.geometry.attributes.position;
+    const step = Math.max(1, Math.floor(pos.count / 20000));
+    for (let i = 0; i < pos.count; i += step) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld);
+      pts.push([v.x, v.z]);
+    }
+  });
+  // convex hull, monotone chain
+  pts.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lower = [], upper = [];
+  for (const q of pts) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], q) <= 0) lower.pop();
+    lower.push(q);
+  }
+  for (let i = pts.length - 1; i >= 0; i--) {
+    const q = pts[i];
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], q) <= 0) upper.pop();
+    upper.push(q);
+  }
+  const hull = lower.slice(0, -1).concat(upper.slice(0, -1));
+  boundaryLine.geometry.dispose();
+  boundaryLine.geometry = new THREE.BufferGeometry().setFromPoints(
+    hull.map(q => new THREE.Vector3(q[0], 0, q[1])));
+  boundaryLine.computeLineDistances();
+}
 
 const levelIntersection = new THREE.LineSegments(
   new THREE.BufferGeometry(),
@@ -507,6 +607,7 @@ function updateLevelReadout() {
   const inp = document.getElementById('levelInput');
   if (inp && document.activeElement !== inp) inp.value = levelPlane.position.y.toFixed(2);
   slabOutline.position.y = levelPlane.position.y + 0.01;
+  boundaryLine.position.y = levelPlane.position.y + 0.01;
   updateLevelIntersection();
 }
 function sizeLevelPlane() {
@@ -1071,36 +1172,40 @@ document.getElementById('tripodMove').addEventListener('click', () => setTripodG
 document.getElementById('tripodRotate').addEventListener('click', () => setTripodGizmoMode('rotate'));
 setTripodGizmoMode('translate');
 
-// ---- levelling staff wiring ----
+// ---- levelling staffs wiring ----
 function refreshStaffGizmo() {
-  if (staffGizmoActive && staffRoot && staffRoot.visible) {
-    staffGizmo.attach(staffRoot); staffGizmo.visible = true;
+  const sel = staffs[staffMoveSel];
+  if (staffMoveSel >= 0 && sel && sel.visible) {
+    staffGizmo.attach(sel); staffGizmo.visible = true;
   } else {
     staffGizmo.detach(); staffGizmo.visible = false;
   }
 }
 
-function setStaffVisible(on) {
+function setStaffsVisible(on) {
   staffOn = on;
-  ensureStaff();
-  if (on && !lastValidPos.staff) placeStaffNearInstrument();
-  staffRoot.visible = on;
+  ensureStaffs();
+  if (on && !staffsPlaced) { placeStaffsDefault(); staffsPlaced = true; }
+  staffs.forEach(s => s.visible = on);
   const btn = document.getElementById('staffToggle');
   btn.classList.toggle('active', on);
-  btn.textContent = on ? 'Hide Staff' : 'Show Staff';
+  btn.textContent = on ? 'Hide Staffs' : 'Show Staffs';
   refreshStaffGizmo();
-  ensureSightPair();
+  faceStaffsToInstrument();
+  updateSightVisuals();
 }
 
-document.getElementById('staffToggle').addEventListener('click', () => setStaffVisible(!staffOn));
-document.getElementById('staffGizmoToggle').addEventListener('click', () => {
-  staffGizmoActive = !staffGizmoActive;
-  if (staffGizmoActive) { autoRotateCamera = false; if (!staffOn) { setStaffVisible(true); } }
-  const btn = document.getElementById('staffGizmoToggle');
-  btn.classList.toggle('active', staffGizmoActive);
-  btn.textContent = staffGizmoActive ? 'Disable Move' : 'Enable Move';
+function selectStaffMove(i) {
+  staffMoveSel = (staffMoveSel === i) ? -1 : i;
+  if (staffMoveSel >= 0) { autoRotateCamera = false; if (!staffOn) setStaffsVisible(true); }
+  for (let k = 0; k < STAFF_COUNT; k++)
+    document.getElementById('staffMove' + k).classList.toggle('active', k === staffMoveSel);
   refreshStaffGizmo();
-});
+}
+
+document.getElementById('staffToggle').addEventListener('click', () => setStaffsVisible(!staffOn));
+document.getElementById('staffMove0').addEventListener('click', () => selectStaffMove(0));
+document.getElementById('staffMove1').addEventListener('click', () => selectStaffMove(1));
 
 function setLevelActive(on) {
   levelActive = on;
@@ -1109,6 +1214,7 @@ function setLevelActive(on) {
   levelPlane.visible = levelActive;
   levelCtrl.visible = levelActive;
   slabOutline.visible = levelActive;
+  boundaryLine.visible = levelActive;
   document.getElementById('levelReadout').style.display = levelActive ? 'block' : 'none';
   const btn = document.getElementById('levelToggle');
   btn.classList.toggle('active', levelActive);
@@ -1162,15 +1268,16 @@ document.querySelectorAll('.overlay-row').forEach(row => {
             g.scene.position.set(c.x, g.scene.position.y, c.z);
           }
           snapToTerrain(g.scene);
-          lastValidPos.tripod = g.scene.position.clone();
           refreshTripodGizmoAttachment();
-          ensureSightPair();
+          if (staffAutoShowPending) { staffAutoShowPending = false; setStaffsVisible(true); }
+          faceStaffsToInstrument();
+          updateSightVisuals();
         }
       }, undefined, (err) => { loadingEl.textContent = 'Overlay failed: ' + err; });
     } else if (overlayRoots[file]) {
       overlayRoots[file].visible = on;
       if (file === EXCAVATOR_FILE) updateExcavatorForStage();
-      if (file === TRIPOD_FILE) { refreshTripodGizmoAttachment(); ensureSightPair(); }
+      if (file === TRIPOD_FILE) { refreshTripodGizmoAttachment(); faceStaffsToInstrument(); updateSightVisuals(); }
     }
   });
 });
@@ -1352,21 +1459,23 @@ function loadStage(idx) {
     buildLayerPanel();   // panel build re-applies mesh visibility, so carve after it
     computeHoleClusters();
     applyTerrainHoles();
+    buildBoundaryOutline();
     updateExcavatorForStage();
     // new stage = new terrain: re-seat the survey gear on it and make sure
     // the staff is still within the instrument's sight
     const tripodRoot = overlayRoots[TRIPOD_FILE];
-    if (tripodRoot) { snapToTerrain(tripodRoot); lastValidPos.tripod = tripodRoot.position.clone(); }
-    if (staffRoot) snapToTerrain(staffRoot);
-    ensureSightPair();
+    if (tripodRoot) snapToTerrain(tripodRoot);
+    staffs.forEach(st => snapToTerrain(st));
+    faceStaffsToInstrument();
+    updateSightVisuals();
     updateLevelIntersection();
     // survey gear is the point of this tool: show the dumpy level and the
     // staff from the start (once, on the first stage load)
     if (!surveyGearShown) {
       surveyGearShown = true;
+      staffAutoShowPending = true;   // staffs placed once the instrument is in
       const cb = document.querySelector('.overlay-row[data-file="' + TRIPOD_FILE + '"] input');
       if (cb && !cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change')); }
-      setStaffVisible(true);
     }
     loadingEl.style.display = 'none';
     if (shouldRunFirstTour) maybeOpenFirstRunTour();
