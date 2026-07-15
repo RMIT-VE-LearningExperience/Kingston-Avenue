@@ -259,6 +259,7 @@ function snapToTerrain(obj) {
 // height <= staff base + 3 m. Dragging either one is clamped so the pair can
 // never be moved out of each other's sight.
 const STAFF_HEIGHT = 3.0;
+let surveyGearShown = false;      // dumpy level + staff auto-shown on first stage load
 let instrumentTop = 1.70;         // model ground->top; measured from the GLB on load
 let staffRoot = null;             // group, base at local Y=0
 let staffOn = false;
@@ -1359,6 +1360,14 @@ function loadStage(idx) {
     if (staffRoot) snapToTerrain(staffRoot);
     ensureSightPair();
     updateLevelIntersection();
+    // survey gear is the point of this tool: show the dumpy level and the
+    // staff from the start (once, on the first stage load)
+    if (!surveyGearShown) {
+      surveyGearShown = true;
+      const cb = document.querySelector('.overlay-row[data-file="' + TRIPOD_FILE + '"] input');
+      if (cb && !cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change')); }
+      setStaffVisible(true);
+    }
     loadingEl.style.display = 'none';
     if (shouldRunFirstTour) maybeOpenFirstRunTour();
   }, undefined, (err) => {
