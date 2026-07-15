@@ -50,6 +50,14 @@ When a pile layer's checkbox is off, its bore holes are carved out of the terrai
 
 GitHub Pages — push to `main`, the site deploys automatically from the repo root at `https://rmit-ve-learningexperience.github.io/Kingston-Avenue/`.
 
+## survey-tool/
+
+`survey-tool/` is a standalone copy of the viewer (own `index.html`/`main.js`/`style.css`/`models/`, served at `/survey-tool/`) being repurposed for surveying training. Changes there never touch the main viewer. On top of the base viewer it has:
+
+- **Dumpy level + tripod** (`models/tripod.glb`, converted from a SketchUp upload; raw model was millimetres and off-origin — normalised to 1.70 m total height, instrument vertical axis at local (0,0), spike tips at Y=0). Placed via the "Dumpy Level Placement" move/rotate gizmo; Y continuously snaps to the terrain.
+- **Levelling staff**: procedural 3 m E-pattern staff (`ensureStaff()`/`makeStaffTexture()` — canvas texture, black/red alternating metres). Moved with its own XZ gizmo, terrain-snapped, and it always rotates to face the instrument.
+- **Line-of-sight rule**: the instrument sights horizontally at `tripod.position.y + instrumentTop` (measured from the GLB at load). Valid iff `staffBase <= sightY <= staffBase + 3`. Drags that break it are clamped (`enforceSightRule` reverts to last valid position); non-drag causes (stage change, toggles) re-seat the staff next to the instrument (`ensureSightPair`). A dashed sight line + marker shows where the sight crosses the staff, and the panel shows the live staff reading (`sightY - staffBase`).
+
 ## SPW4 staging (installed before the stage-03 excavation)
 
 Per site sequencing (Chris Nguyen, Jul 2026) — this supersedes the earlier reading of drawing `S02 Retention Layout Plan rev A`, which shows where the walls are, not when they are built:

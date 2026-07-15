@@ -228,7 +228,10 @@ scene.add(levelCtrl);
 // Y-axis only (heading) — the model is rigid, it doesn't adapt to slope.
 const tripodGizmo = new TransformControls(camera, renderer.domElement);
 tripodGizmo.addEventListener('dragging-changed', (e) => { controls.enabled = !e.value; });
-tripodGizmo.addEventListener('objectChange', () => snapToTerrain(tripodGizmo.object));
+tripodGizmo.addEventListener('objectChange', () => {
+  snapToTerrain(tripodGizmo.object);
+  enforceSightRule('tripod');
+});
 tripodGizmo.visible = false;
 scene.add(tripodGizmo);
 
@@ -249,6 +252,158 @@ function snapToTerrain(obj) {
   const hit = raycaster.intersectObjects(groups.soil, false)[0];
   if (hit) obj.position.y = hit.point.y;
 }
+
+// ---- levelling staff (3 m E-pattern staff) + line-of-sight rule ----
+// The dumpy level sights along a horizontal line at the instrument top. The
+// staff is readable only while that line crosses it: staff base <= sight
+// height <= staff base + 3 m. Dragging either one is clamped so the pair can
+// never be moved out of each other's sight.
+const STAFF_HEIGHT = 3.0;
+let instrumentTop = 1.70;         // model ground->top; measured from the GLB on load
+let staffRoot = null;             // group, base at local Y=0
+let staffOn = false;
+let staffGizmoActive = false;
+const lastValidPos = { staff: null, tripod: null };
+
+function makeStaffTexture(mirror) {
+  const PXM = 512;                // pixels per metre
+  const c = document.createElement('canvas');
+  c.width = 128; c.height = PXM * STAFF_HEIGHT;
+  const g = c.getContext('2d');
+  g.fillStyle = '#f7f6f1'; g.fillRect(0, 0, c.width, c.height);
+  for (let m = 0; m < STAFF_HEIGHT; m++) {
+    g.fillStyle = (m % 2) ? '#c8102e' : '#1a1a1a';   // alternate black / red metres
+    for (let dm = 0; dm < 10; dm++) {
+      const cell = PXM / 10;
+      const cellTop = c.height - (m + (dm + 1) / 10) * PXM;
+      const bar = cell / 5;
+      // E-pattern block on the left, decimetre digit on the right
+      g.fillRect(6, cellTop, 44, bar);
+      g.fillRect(6, cellTop + 2 * bar, 44, bar);
+      g.fillRect(6, cellTop + 4 * bar, 44, bar);
+      g.fillRect(6, cellTop, 12, cell);
+      g.font = 'bold 34px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(String(dm), 88, cellTop + cell / 2);
+    }
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  if (mirror) { tex.wrapS = THREE.RepeatWrapping; tex.repeat.x = -1; }
+  return tex;
+}
+
+function ensureStaff() {
+  if (staffRoot) return staffRoot;
+  staffRoot = new THREE.Group();
+  const alu = new THREE.MeshStandardMaterial({ color: 0xd8d8d2, roughness: 0.5, metalness: 0.4 });
+  const face = (mirror) => new THREE.MeshStandardMaterial({ map: makeStaffTexture(mirror), roughness: 0.85 });
+  const body = new THREE.Mesh(
+    new THREE.BoxGeometry(0.10, STAFF_HEIGHT, 0.025),
+    [alu, alu, alu, alu, face(false), face(true)]
+  );
+  body.position.y = STAFF_HEIGHT / 2;
+  staffRoot.add(body);
+  const foot = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.02, 0.06), alu);
+  foot.position.y = 0.01;
+  staffRoot.add(foot);
+  staffRoot.visible = false;
+  vrWorld.add(staffRoot);
+  return staffRoot;
+}
+
+// dashed horizontal sight line from the instrument to the staff, with a
+// marker where it crosses the staff (= the reading)
+const sightLine = new THREE.Line(
+  new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
+  new THREE.LineDashedMaterial({ color: 0xffcc44, dashSize: 0.35, gapSize: 0.2,
+                                 transparent: true, opacity: 0.9 })
+);
+sightLine.visible = false;
+vrWorld.add(sightLine);
+const sightMark = new THREE.Mesh(new THREE.SphereGeometry(0.045, 16, 12),
+                                 new THREE.MeshBasicMaterial({ color: 0xffcc44 }));
+sightMark.visible = false;
+vrWorld.add(sightMark);
+
+function sightState() {
+  const t = overlayRoots[TRIPOD_FILE];
+  if (!t || !t.visible || !staffRoot || !staffRoot.visible) return null;
+  const sightY = t.position.y + instrumentTop;
+  const base = staffRoot.position.y;
+  return { t, sightY, base, ok: base <= sightY && sightY <= base + STAFF_HEIGHT };
+}
+
+function updateSightVisuals() {
+  const st = sightState();
+  const status = document.getElementById('staffStatus');
+  if (!st) {
+    sightLine.visible = sightMark.visible = false;
+    if (status) status.textContent = 'Staff reading: —';
+    return;
+  }
+  sightLine.geometry.setFromPoints([
+    new THREE.Vector3(st.t.position.x, st.sightY, st.t.position.z),
+    new THREE.Vector3(staffRoot.position.x, st.sightY, staffRoot.position.z)]);
+  sightLine.computeLineDistances();
+  sightLine.visible = true;
+  sightMark.position.set(staffRoot.position.x, st.sightY, staffRoot.position.z);
+  sightMark.visible = true;
+  if (status) status.textContent = 'Staff reading: ' + (st.sightY - st.base).toFixed(3) + ' m';
+}
+
+// the staff face always turns toward the instrument, like a staffman would hold it
+function faceStaffToInstrument() {
+  const t = overlayRoots[TRIPOD_FILE];
+  if (t && staffRoot) staffRoot.lookAt(t.position.x, staffRoot.position.y, t.position.z);
+}
+
+// drag clamp: when a drag breaks the sight rule, snap the dragged object back
+// to its last valid spot so the pair stays within sight of each other
+function enforceSightRule(which) {
+  const st = sightState();
+  if (!st) return;
+  if (st.ok) {
+    lastValidPos.staff = staffRoot.position.clone();
+    lastValidPos.tripod = st.t.position.clone();
+  } else {
+    const obj = which === 'staff' ? staffRoot : st.t;
+    if (lastValidPos[which]) obj.position.copy(lastValidPos[which]);
+  }
+  faceStaffToInstrument();
+  updateSightVisuals();
+}
+
+// for non-drag causes (stage change, toggling things on): if the rule is
+// broken, bring the staff back into the instrument's vicinity
+function ensureSightPair() {
+  const st = sightState();
+  if (st && !st.ok) placeStaffNearInstrument();
+  else if (st) { lastValidPos.staff = staffRoot.position.clone(); lastValidPos.tripod = st.t.position.clone(); }
+  faceStaffToInstrument();
+  updateSightVisuals();
+}
+
+function placeStaffNearInstrument() {
+  ensureStaff();
+  const t = overlayRoots[TRIPOD_FILE];
+  if (t) staffRoot.position.set(t.position.x + 4, t.position.y, t.position.z);
+  else if (groups.soil && groups.soil.length) {
+    const b = new THREE.Box3(); groups.soil.forEach(m => b.expandByObject(m));
+    const c = b.getCenter(new THREE.Vector3());
+    staffRoot.position.set(c.x + 4, 0, c.z);
+  }
+  snapToTerrain(staffRoot);
+  lastValidPos.staff = staffRoot.position.clone();
+}
+
+const staffGizmo = new TransformControls(camera, renderer.domElement);
+staffGizmo.setMode('translate');
+staffGizmo.showY = false;                        // XZ drag; Y follows the terrain
+staffGizmo.addEventListener('dragging-changed', (e) => { controls.enabled = !e.value; });
+staffGizmo.addEventListener('objectChange', () => { snapToTerrain(staffRoot); enforceSightRule('staff'); });
+staffGizmo.visible = false;
+scene.add(staffGizmo);
 
 let levelActive = false, levelInit = false;
 // ---- building/slab footprint outline that rides on the level plane ----
@@ -666,7 +821,7 @@ const hidden = {};        // cat -> bool (persist layer visibility across stages
 const STAGE_CATEGORY_EXCLUSIONS = {};
 
 // bump ASSET_V whenever model .glb files change, so browsers fetch the new ones
-const ASSET_V = '24';
+const ASSET_V = '25';
 const bust = (url) => url + (url.includes('?') ? '&' : '?') + 'v=' + ASSET_V;
 
 const loader = new GLTFLoader();
@@ -915,6 +1070,37 @@ document.getElementById('tripodMove').addEventListener('click', () => setTripodG
 document.getElementById('tripodRotate').addEventListener('click', () => setTripodGizmoMode('rotate'));
 setTripodGizmoMode('translate');
 
+// ---- levelling staff wiring ----
+function refreshStaffGizmo() {
+  if (staffGizmoActive && staffRoot && staffRoot.visible) {
+    staffGizmo.attach(staffRoot); staffGizmo.visible = true;
+  } else {
+    staffGizmo.detach(); staffGizmo.visible = false;
+  }
+}
+
+function setStaffVisible(on) {
+  staffOn = on;
+  ensureStaff();
+  if (on && !lastValidPos.staff) placeStaffNearInstrument();
+  staffRoot.visible = on;
+  const btn = document.getElementById('staffToggle');
+  btn.classList.toggle('active', on);
+  btn.textContent = on ? 'Hide Staff' : 'Show Staff';
+  refreshStaffGizmo();
+  ensureSightPair();
+}
+
+document.getElementById('staffToggle').addEventListener('click', () => setStaffVisible(!staffOn));
+document.getElementById('staffGizmoToggle').addEventListener('click', () => {
+  staffGizmoActive = !staffGizmoActive;
+  if (staffGizmoActive) { autoRotateCamera = false; if (!staffOn) { setStaffVisible(true); } }
+  const btn = document.getElementById('staffGizmoToggle');
+  btn.classList.toggle('active', staffGizmoActive);
+  btn.textContent = staffGizmoActive ? 'Disable Move' : 'Enable Move';
+  refreshStaffGizmo();
+});
+
 function setLevelActive(on) {
   levelActive = on;
   if (levelActive) { autoRotateCamera = false; sizeLevelPlane(); levelCtrl.attach(levelPlane); }
@@ -964,6 +1150,9 @@ document.querySelectorAll('.overlay-row').forEach(row => {
         loadingEl.style.display = 'none';
         if (file === EXCAVATOR_FILE) updateExcavatorForStage();
         if (file === TRIPOD_FILE) {
+          // measure the instrument height from the model itself (root is at
+          // origin here, so world top == local top)
+          instrumentTop = new THREE.Box3().setFromObject(g.scene).max.y;
           // drop it at the centre of the terrain on first load, not world origin
           if (groups.soil && groups.soil.length) {
             const soilBox = new THREE.Box3();
@@ -972,13 +1161,15 @@ document.querySelectorAll('.overlay-row').forEach(row => {
             g.scene.position.set(c.x, g.scene.position.y, c.z);
           }
           snapToTerrain(g.scene);
+          lastValidPos.tripod = g.scene.position.clone();
           refreshTripodGizmoAttachment();
+          ensureSightPair();
         }
       }, undefined, (err) => { loadingEl.textContent = 'Overlay failed: ' + err; });
     } else if (overlayRoots[file]) {
       overlayRoots[file].visible = on;
       if (file === EXCAVATOR_FILE) updateExcavatorForStage();
-      if (file === TRIPOD_FILE) refreshTripodGizmoAttachment();
+      if (file === TRIPOD_FILE) { refreshTripodGizmoAttachment(); ensureSightPair(); }
     }
   });
 });
@@ -1161,6 +1352,12 @@ function loadStage(idx) {
     computeHoleClusters();
     applyTerrainHoles();
     updateExcavatorForStage();
+    // new stage = new terrain: re-seat the survey gear on it and make sure
+    // the staff is still within the instrument's sight
+    const tripodRoot = overlayRoots[TRIPOD_FILE];
+    if (tripodRoot) { snapToTerrain(tripodRoot); lastValidPos.tripod = tripodRoot.position.clone(); }
+    if (staffRoot) snapToTerrain(staffRoot);
+    ensureSightPair();
     updateLevelIntersection();
     loadingEl.style.display = 'none';
     if (shouldRunFirstTour) maybeOpenFirstRunTour();
