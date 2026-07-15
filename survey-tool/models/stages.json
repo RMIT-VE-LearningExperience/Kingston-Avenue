@@ -1,0 +1,126 @@
+[
+  {
+    "id": "ngl",
+    "label": "00 \u2014 NGL (Ground Level)",
+    "file": "models/ngl.glb",
+    "meshes": 15,
+    "mb": 0.31,
+    "excavator": {
+      "pos": [
+        -7.632,
+        0.299,
+        -14.444
+      ],
+      "quat": [
+        0.0,
+        0.009,
+        0.0,
+        1.0
+      ]
+    }
+  },
+  {
+    "id": "cb3_spw6",
+    "label": "01 \u2014 CB3 / SPW6",
+    "file": "models/cb3_spw6.glb",
+    "meshes": 15,
+    "mb": 0.31,
+    "excavator": {
+      "pos": [
+        -2.191,
+        2.148,
+        -17.023
+      ],
+      "quat": [
+        0.0,
+        0.009,
+        0.0,
+        1.0
+      ]
+    }
+  },
+  {
+    "id": "cb1_spw5_rtw1",
+    "label": "02 \u2014 CB1 / SPW5 + RTW1",
+    "file": "models/cb1_spw5_rtw1.glb",
+    "meshes": 53,
+    "mb": 0.57,
+    "excavator": {
+      "pos": [
+        -5.196,
+        2.481,
+        -6.081
+      ],
+      "quat": [
+        0.0,
+        0.9458,
+        0.0,
+        0.3248
+      ]
+    }
+  },
+  {
+    "id": "spw1",
+    "label": "03 \u2014 SPW1",
+    "file": "models/spw1.glb",
+    "meshes": 76,
+    "mb": 0.73,
+    "excavator": {
+      "pos": [
+        -5.196,
+        2.481,
+        -6.081
+      ],
+      "quat": [
+        0.0,
+        0.9458,
+        0.0,
+        0.3248
+      ]
+    }
+  },
+  {
+    "id": "cb1_spw2_3",
+    "label": "04 \u2014 CB1 / SPW 2+3",
+    "file": "models/cb1_spw2_3.glb",
+    "meshes": 82,
+    "mb": 0.78,
+    "excavator": {
+      "pos": [
+        12.0,
+        7.96,
+        -10.374
+      ],
+      "quat": [
+        -0.0798,
+        0.5247,
+        0.1275,
+        0.8379
+      ]
+    }
+  },
+  {
+    "id": "cb2_spw4",
+    "label": "05 \u2014 CB2 / SPW4",
+    "file": "models/cb2_spw4.glb",
+    "meshes": 103,
+    "mb": 0.93,
+    "excavator": null
+  },
+  {
+    "id": "shotcrete",
+    "label": "06 \u2014 Shotcrete",
+    "file": "models/shotcrete.glb",
+    "meshes": 111,
+    "mb": 0.96,
+    "excavator": null
+  },
+  {
+    "id": "slab",
+    "label": "07 \u2014 Slab",
+    "file": "models/slab.glb",
+    "meshes": 112,
+    "mb": 0.98,
+    "excavator": null
+  }
+]

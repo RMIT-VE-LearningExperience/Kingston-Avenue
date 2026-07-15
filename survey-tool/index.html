@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kingston — Excavation Stage Viewer</title>
+  <link rel="stylesheet" href="style.css" />
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+      "three-mesh-bvh": "https://unpkg.com/three-mesh-bvh@0.7.8/build/index.module.js",
+      "three-bvh-csg": "https://unpkg.com/three-bvh-csg@0.0.17/build/index.module.js"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="app">
+    <aside id="panel">
+      <h1>Kingston Excavation</h1>
+      <p class="sub">3D Stage Viewer</p>
+
+      <section>
+        <label class="section-label">Layers</label>
+        <div id="layers"></div>
+      </section>
+
+      <section>
+        <label class="section-label">Overlays</label>
+        <label class="layer overlay-row" data-file="models/excavator.glb">
+          <span class="swatch" style="background:#d9b53d"></span>
+          <span class="name">Excavator</span>
+          <span class="count">123</span>
+          <span class="eye"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-7-11-7a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></span>
+          <input type="checkbox" />
+        </label>
+        <label class="layer overlay-row" data-file="models/neighbour.glb">
+          <span class="swatch" style="background:#a8503c"></span>
+          <span class="name">Neighbour + Wall</span>
+          <span class="count">3</span>
+          <span class="eye"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-7-11-7a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></span>
+          <input type="checkbox" />
+        </label>
+        <label class="layer overlay-row" data-file="models/neighbour_left.glb">
+          <span class="swatch" style="background:#6b8f3a"></span>
+          <span class="name">Neighbour-Left + Fence</span>
+          <span class="count">3</span>
+          <span class="eye"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-7-11-7a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></span>
+          <input type="checkbox" />
+        </label>
+      </section>
+
+      <section hidden>
+        <label class="section-label">Excavator Placement</label>
+        <button id="gizmoToggle" class="wide">Enable Move Gizmo</button>
+        <div class="btnrow" style="margin-top:7px">
+          <button id="gizmoMove">Move</button>
+          <button id="gizmoRotate">Rotate</button>
+        </div>
+      </section>
+
+      <section>
+        <label class="section-label">Level Tool</label>
+        <button id="levelToggle" class="wide">Show Level Plane</button>
+      </section>
+
+      <section>
+        <label class="section-label">Measure</label>
+        <div class="btnrow measure-actions">
+          <button id="measureClear">Clear</button>
+        </div>
+        <div id="measureStatus" class="tool-status">Click two points on the model</div>
+      </section>
+
+      <section>
+        <label class="section-label">Soil X-ray</label>
+        <input type="range" id="soilOpacity" min="0" max="100" value="100" />
+        <div class="rowval"><span>Transparent</span><span id="soilVal">100%</span></div>
+      </section>
+
+      <p class="hint">Drag to orbit · scroll or +/− to zoom · right-drag to pan</p>
+    </aside>
+
+    <main id="viewport">
+      <div id="loading">Loading model…</div>
+      <div id="viewControls" aria-label="View controls">
+        <div class="view-tool-stack">
+          <button id="zoomInBtn" class="round-tool" aria-label="Zoom in" title="Zoom in">
+            <span aria-hidden="true">+</span>
+          </button>
+          <button id="zoomOutBtn" class="round-tool" aria-label="Zoom out" title="Zoom out">
+            <span aria-hidden="true">−</span>
+          </button>
+          <button id="resetBtn" class="round-tool" aria-label="Reset camera" title="Reset camera">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 5a7 7 0 1 1-6.1 3.57" />
+              <path d="M5.5 5.5v4h4" />
+            </svg>
+          </button>
+          <button id="measureToggle" class="round-tool" aria-label="Start measuring" title="Measure distance">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M5 16.5 16.5 5 20 8.5 8.5 20z" />
+              <path d="M9 15.5 7.5 14" />
+              <path d="M12 12.5 10.5 11" />
+              <path d="M15 9.5 13.5 8" />
+            </svg>
+          </button>
+          <button id="levelToolToggle" class="round-tool" aria-label="Show level plane" title="Show level plane">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 8.5 12 4l8 4.5-8 4.5z" />
+              <path d="M4 15.5 12 20l8-4.5" />
+              <path d="M4 12 12 16.5 20 12" />
+            </svg>
+          </button>
+          <button id="vrToggle" class="round-tool" aria-label="Enter VR" title="Enter VR">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M5.5 8.5h13A2.5 2.5 0 0 1 21 11v4.5a2 2 0 0 1-2 2h-2.1a2.5 2.5 0 0 1-2.1-1.1l-.8-1.2a2.4 2.4 0 0 0-4 0l-.8 1.2a2.5 2.5 0 0 1-2.1 1.1H5a2 2 0 0 1-2-2V11a2.5 2.5 0 0 1 2.5-2.5z" />
+              <path d="M7.5 12.5h3" />
+              <path d="M13.5 12.5h3" />
+            </svg>
+          </button>
+          <button id="helpTourToggle" class="round-tool" aria-label="Open help" title="Help">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M9.6 9a2.6 2.6 0 0 1 5 1c0 1.8-2.6 2.2-2.6 4" />
+              <path d="M12 17.5h.01" />
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div id="gizmoTooltip" class="viewport-tooltip" style="display:none"></div>
+      <svg id="measureOverlay" style="display:none" aria-hidden="true">
+        <line id="measureOverlayLine" />
+        <g id="measureOverlayStart" class="measure-pin start-pin" aria-label="Move measurement start">
+          <path d="M0 0 C-8 -8 -13 -14 -13 -22 C-13 -30 -7 -36 0 -36 C7 -36 13 -30 13 -22 C13 -14 8 -8 0 0 Z" />
+          <circle cx="0" cy="-23" r="4" />
+        </g>
+        <g id="measureOverlayEnd" class="measure-pin end-pin" aria-label="Move measurement end">
+          <path d="M0 0 C-8 -8 -13 -14 -13 -22 C-13 -30 -7 -36 0 -36 C7 -36 13 -30 13 -22 C13 -14 8 -8 0 0 Z" />
+          <circle cx="0" cy="-23" r="4" />
+        </g>
+        <text id="measureOverlayStartLabel">START</text>
+        <text id="measureOverlayEndLabel">END</text>
+      </svg>
+      <div id="measureLabel" style="display:none"></div>
+      <div id="levelReadout" style="display:none">
+        <div class="gr-title">Level (m)</div>
+        <div class="level-row">
+          <input type="number" id="levelInput" step="0.1" />
+          <span id="levelValue">0.00 m</span>
+        </div>
+        <div class="gr-json">Type a level or drag the green handle</div>
+      </div>
+      <div id="gizmoReadout" style="display:none" hidden>
+        <div class="gr-title">Excavator — stage <span id="grStage"></span></div>
+        <div>pos <span id="grPos"></span></div>
+        <div>quat <span id="grQuat"></span></div>
+        <div class="gr-json" id="grJson"></div>
+      </div>
+      <div id="scrubber">
+        <div id="scrubLabel">Stage</div>
+        <input type="range" id="stageScrub" min="0" max="0" step="1" value="0" />
+        <div id="scrubTicks"></div>
+      </div>
+    </main>
+  </div>
+
+  <div id="onboarding" class="tour" hidden>
+    <div class="tour-scrim"></div>
+    <div id="tourSpotlight" class="tour-spotlight" aria-hidden="true"></div>
+    <section id="tourCard" class="tour-card" role="dialog" aria-modal="true" aria-labelledby="tourTitle">
+      <div class="tour-count" id="tourCount"></div>
+      <h2 id="tourTitle"></h2>
+      <p id="tourBody"></p>
+      <div class="tour-actions">
+        <button id="tourSkip" type="button">Skip</button>
+        <div class="tour-step-actions">
+          <button id="tourBack" type="button">Back</button>
+          <button id="tourNext" type="button">Next</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>
