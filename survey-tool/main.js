@@ -576,6 +576,74 @@ function buildBoundaryOutline() {
   boundaryLine.geometry = new THREE.BufferGeometry().setFromPoints(
     hull.map(q => new THREE.Vector3(q[0], 0, q[1])));
   boundaryLine.computeLineDistances();
+  buildSetoutGrid(hull);
+}
+
+// ---- structural setout grid (drawing A.02), rides the level plane ----
+// Numbered lines 1/2/3 run parallel to the east boundary, dimensioned west
+// from it (chain 12990/8390/5500). Lettered lines A–E run across the site,
+// dimensioned up the east boundary from the setout point at its south-east
+// corner (E +1000, D +7590, C +12680, B +20140, A +21850). Grid 3 lands on
+// the SPW4 wall line and grid E on the slab's south edge — both checks pass.
+// A and B belong to the wider west part of the parcel and float north of
+// the modeled terrain block.
+const GRID_NUM = [{ label: '1', d: 26.88 }, { label: '2', d: 13.89 }, { label: '3', d: 5.50 }];
+const GRID_LET = [{ label: 'A', d: 21.85 }, { label: 'B', d: 20.14 }, { label: 'C', d: 12.68 },
+                  { label: 'D', d: 7.59 }, { label: 'E', d: 1.00 }];
+const gridGroup = new THREE.Group();
+gridGroup.visible = false;
+gridGroup.renderOrder = 15;
+scene.add(gridGroup);
+
+function makeGridBubble(label) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 96;
+  const g = c.getContext('2d');
+  g.beginPath(); g.arc(48, 48, 40, 0, Math.PI * 2);
+  g.fillStyle = '#f4f4f0'; g.fill();
+  g.lineWidth = 5; g.strokeStyle = '#1a1a1a'; g.stroke();
+  g.fillStyle = '#1a1a1a'; g.font = 'bold 46px Arial';
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(label, 48, 50);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
+  spr.scale.setScalar(1.1);
+  return spr;
+}
+
+function buildSetoutGrid(hull) {
+  gridGroup.children.slice().forEach(o => {
+    if (o.isLine) o.geometry.dispose();
+    if (o.material && o.material.map) o.material.map.dispose();
+    gridGroup.remove(o);
+  });
+  const xs = hull.map(q => q[0]), zs = hull.map(q => q[1]);
+  const eastX = Math.max(...xs);
+  const westX = Math.min(...xs);
+  // setout corner z: southernmost hull point near the east edge
+  const southZ = Math.min(...hull.filter(q => q[0] > eastX - 2).map(q => q[1]));
+  const northZ = Math.max(...zs);
+  const mat = () => new THREE.LineDashedMaterial({ color: 0xbfc2c7, dashSize: 0.45, gapSize: 0.3,
+                                                   transparent: true, opacity: 0.85 });
+  const addLine = (p1, p2, label) => {
+    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([p1, p2]), mat());
+    line.computeLineDistances();
+    gridGroup.add(line);
+    for (const end of [p1, p2]) {
+      const b = makeGridBubble(label);
+      b.position.copy(end);
+      gridGroup.add(b);
+    }
+  };
+  GRID_NUM.forEach(gl => {
+    const x = eastX - gl.d;
+    addLine(new THREE.Vector3(x, 0, southZ - 2.2), new THREE.Vector3(x, 0, northZ + 2.2), gl.label);
+  });
+  GRID_LET.forEach(gl => {
+    const z = southZ + gl.d;
+    addLine(new THREE.Vector3(westX - 2.2, 0, z), new THREE.Vector3(eastX + 2.2, 0, z), gl.label);
+  });
 }
 
 const levelIntersection = new THREE.LineSegments(
@@ -655,6 +723,7 @@ function updateLevelReadout() {
   if (inp && document.activeElement !== inp) inp.value = levelPlane.position.y.toFixed(2);
   slabOutline.position.y = levelPlane.position.y + 0.01;
   boundaryLine.position.y = levelPlane.position.y + 0.01;
+  gridGroup.position.y = levelPlane.position.y + 0.01;
   updateLevelIntersection();
 }
 function sizeLevelPlane() {
@@ -1264,6 +1333,7 @@ function setLevelActive(on) {
   levelCtrl.visible = levelActive;
   slabOutline.visible = levelActive;
   boundaryLine.visible = levelActive;
+  gridGroup.visible = levelActive;
   document.getElementById('levelReadout').style.display = levelActive ? 'block' : 'none';
   const btn = document.getElementById('levelToggle');
   btn.classList.toggle('active', levelActive);
