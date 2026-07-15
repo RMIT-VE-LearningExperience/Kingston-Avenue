@@ -631,14 +631,15 @@ function buildSetoutGrid(hull) {
     if (o.material && o.material.map) o.material.map.dispose();
     gridGroup.remove(o);
   });
-  const xs = hull.map(q => q[0]), zs = hull.map(q => q[1]);
-  const eastX = Math.max(...xs);
-  const westX = Math.min(...xs);
-  const southZ = Math.min(...zs);
-  const northZ = Math.max(...zs);
-  // anchor: the building's west and south wall lines from the slab footprint
-  const slabX = Math.min(...SLAB_FOOTPRINT.map(q => q[0]));
-  const slabZ = Math.min(...SLAB_FOOTPRINT.map(q => q[1]));
+  // the grid belongs to the BUILDING: lines span the slab footprint (plus a
+  // small margin for the bubbles), not the whole terrain, and lines that
+  // fall outside the building envelope (grid A/B, which serve the parcel's
+  // west part) are not drawn
+  const slabMinX = Math.min(...SLAB_FOOTPRINT.map(q => q[0]));
+  const slabMaxX = Math.max(...SLAB_FOOTPRINT.map(q => q[0]));
+  const slabMinZ = Math.min(...SLAB_FOOTPRINT.map(q => q[1]));
+  const slabMaxZ = Math.max(...SLAB_FOOTPRINT.map(q => q[1]));
+  const M = 1.5;                   // bubble margin beyond the building line
   const mat = () => new THREE.LineDashedMaterial({ color: 0xbfc2c7, dashSize: 0.45, gapSize: 0.3,
                                                    transparent: true, opacity: 0.85 });
   const addLine = (p1, p2, label) => {
@@ -652,12 +653,14 @@ function buildSetoutGrid(hull) {
     }
   };
   GRID_NUM.forEach(gl => {
-    const x = slabX + gl.d;
-    addLine(new THREE.Vector3(x, 0, southZ - 2.2), new THREE.Vector3(x, 0, northZ + 2.2), gl.label);
+    const x = slabMinX + gl.d;
+    if (x < slabMinX - 0.1 || x > slabMaxX + 0.1) return;
+    addLine(new THREE.Vector3(x, 0, slabMinZ - M), new THREE.Vector3(x, 0, slabMaxZ + M), gl.label);
   });
   GRID_LET.forEach(gl => {
-    const z = slabZ + gl.d;
-    addLine(new THREE.Vector3(westX - 2.2, 0, z), new THREE.Vector3(eastX + 2.2, 0, z), gl.label);
+    const z = slabMinZ + gl.d;
+    if (z < slabMinZ - 0.1 || z > slabMaxZ + 0.1) return;
+    addLine(new THREE.Vector3(slabMinX - M, 0, z), new THREE.Vector3(slabMaxX + M, 0, z), gl.label);
   });
 }
 
