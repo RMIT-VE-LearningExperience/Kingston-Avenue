@@ -295,6 +295,8 @@ function makeStaffTexture(mirror) {
   const g = c.getContext('2d');
   g.fillStyle = '#f7f6f1'; g.fillRect(0, 0, c.width, c.height);
   const yTopOf = (metres) => c.height - metres * PXM;   // canvas y for a height
+  // thin centre hairline separating the E column from the number column
+  g.fillStyle = '#141414'; g.fillRect(63, 0, 2, c.height);
   for (let m = 0; m < STAFF_HEIGHT; m++) {
     g.fillStyle = (m % 2) ? '#c8102e' : '#141414';      // black / red metres
     for (let dm = 0; dm < 10; dm++) {
@@ -309,9 +311,10 @@ function makeStaffTexture(mirror) {
       // block pair at 6–7 and 8–9 cm, offset like the real print
       g.fillRect(ex + 8, yTopOf(base + 0.07), 30, CM);
       g.fillRect(ex + 26, yTopOf(base + 0.09), 30, CM);
-      // running decimetre number on the opposite side, upper half of the cell
-      g.font = 'bold 38px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle';
-      g.fillText(String(m) + String(dm), left ? 96 : 32, yTopOf(base + 0.075));
+      // running decimetre number LEVEL with its E on the opposite side,
+      // number base on the decimetre line — like the real face
+      g.font = 'bold 46px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(String(m) + String(dm), left ? 97 : 31, yTopOf(base + 0.025));
     }
   }
   const tex = new THREE.CanvasTexture(c);
