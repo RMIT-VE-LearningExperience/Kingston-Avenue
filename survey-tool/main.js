@@ -229,8 +229,9 @@ scene.add(levelCtrl);
 const tripodGizmo = new TransformControls(camera, renderer.domElement);
 tripodGizmo.addEventListener('dragging-changed', (e) => { controls.enabled = !e.value; });
 tripodGizmo.addEventListener('objectChange', () => {
-  snapToTerrain(tripodGizmo.object);
-  enforceSightRule('tripod');
+  keepOnTerrain(tripodGizmo.object);
+  faceStaffToInstrument();
+  updateSightVisuals();
 });
 tripodGizmo.visible = false;
 scene.add(tripodGizmo);
@@ -244,27 +245,40 @@ function setTripodGizmoMode(mode) {
 }
 
 // raycast straight down onto the soil meshes and drop the object's Y to the
-// hit point, so it always rests on the current terrain surface
+// hit point, so it always rests on the current terrain surface; returns
+// whether there was ground below at all
 function snapToTerrain(obj) {
-  if (!obj || !groups.soil || !groups.soil.length) return;
+  if (!obj || !groups.soil || !groups.soil.length) return false;
   const raycaster = new THREE.Raycaster();
   raycaster.set(new THREE.Vector3(obj.position.x, 1000, obj.position.z), new THREE.Vector3(0, -1, 0));
   const hit = raycaster.intersectObjects(groups.soil, false)[0];
   if (hit) obj.position.y = hit.point.y;
+  return !!hit;
 }
 
-// ---- levelling staff (3 m E-pattern staff) + line-of-sight rule ----
+// keep a dragged object on the site: if the drag left the terrain entirely,
+// put it back on the last spot that had ground underneath
+const lastGroundPos = new Map();
+function keepOnTerrain(obj) {
+  if (!obj) return;
+  if (snapToTerrain(obj)) lastGroundPos.set(obj, obj.position.clone());
+  else if (lastGroundPos.has(obj)) obj.position.copy(lastGroundPos.get(obj));
+}
+
+// ---- levelling staff (3 m E-pattern staff) + line-of-sight readout ----
 // The dumpy level sights along a horizontal line at the instrument top. The
 // staff is readable only while that line crosses it: staff base <= sight
-// height <= staff base + 3 m. Dragging either one is clamped so the pair can
-// never be moved out of each other's sight.
+// height <= staff base + 3 m. Staff and level move fully independently —
+// students discover the staff is out of range and relocate the level
+// themselves (differential levelling practice). The panel and sight line
+// report readable vs out-of-range; nothing is clamped.
 const STAFF_HEIGHT = 3.0;
 let surveyGearShown = false;      // dumpy level + staff auto-shown on first stage load
 let instrumentTop = 1.70;         // model ground->top; measured from the GLB on load
 let staffRoot = null;             // group, base at local Y=0
 let staffOn = false;
+let staffPlaced = false;       // first-show placement done
 let staffGizmoActive = false;
-const lastValidPos = { staff: null, tripod: null };
 
 function makeStaffTexture(mirror) {
   const PXM = 512;                // pixels per metre
@@ -348,9 +362,18 @@ function updateSightVisuals() {
     new THREE.Vector3(staffRoot.position.x, st.sightY, staffRoot.position.z)]);
   sightLine.computeLineDistances();
   sightLine.visible = true;
+  sightLine.material.color.set(st.ok ? 0xffcc44 : 0xff4444);
   sightMark.position.set(staffRoot.position.x, st.sightY, staffRoot.position.z);
-  sightMark.visible = true;
-  if (status) status.textContent = 'Staff reading: ' + (st.sightY - st.base).toFixed(3) + ' m';
+  sightMark.visible = st.ok;
+  if (status) {
+    if (st.ok) {
+      status.textContent = 'Staff reading: ' + (st.sightY - st.base).toFixed(3) + ' m';
+    } else if (st.sightY > st.base + STAFF_HEIGHT) {
+      status.textContent = 'Out of range — sight passes above the staff. Move the level to a lower spot (or the staff higher).';
+    } else {
+      status.textContent = 'Out of range — sight is below the staff base. Move the level to a higher spot (or the staff lower).';
+    }
+  }
 }
 
 // the staff face always turns toward the instrument, like a staffman would hold it
@@ -359,32 +382,7 @@ function faceStaffToInstrument() {
   if (t && staffRoot) staffRoot.lookAt(t.position.x, staffRoot.position.y, t.position.z);
 }
 
-// drag clamp: when a drag breaks the sight rule, snap the dragged object back
-// to its last valid spot so the pair stays within sight of each other
-function enforceSightRule(which) {
-  const st = sightState();
-  if (!st) return;
-  if (st.ok) {
-    lastValidPos.staff = staffRoot.position.clone();
-    lastValidPos.tripod = st.t.position.clone();
-  } else {
-    const obj = which === 'staff' ? staffRoot : st.t;
-    if (lastValidPos[which]) obj.position.copy(lastValidPos[which]);
-  }
-  faceStaffToInstrument();
-  updateSightVisuals();
-}
-
-// for non-drag causes (stage change, toggling things on): if the rule is
-// broken, bring the staff back into the instrument's vicinity
-function ensureSightPair() {
-  const st = sightState();
-  if (st && !st.ok) placeStaffNearInstrument();
-  else if (st) { lastValidPos.staff = staffRoot.position.clone(); lastValidPos.tripod = st.t.position.clone(); }
-  faceStaffToInstrument();
-  updateSightVisuals();
-}
-
+// initial placement only — after this the staff is never moved automatically
 function placeStaffNearInstrument() {
   ensureStaff();
   const t = overlayRoots[TRIPOD_FILE];
@@ -395,14 +393,13 @@ function placeStaffNearInstrument() {
     staffRoot.position.set(c.x + 4, 0, c.z);
   }
   snapToTerrain(staffRoot);
-  lastValidPos.staff = staffRoot.position.clone();
 }
 
 const staffGizmo = new TransformControls(camera, renderer.domElement);
 staffGizmo.setMode('translate');
 staffGizmo.showY = false;                        // XZ drag; Y follows the terrain
 staffGizmo.addEventListener('dragging-changed', (e) => { controls.enabled = !e.value; });
-staffGizmo.addEventListener('objectChange', () => { snapToTerrain(staffRoot); enforceSightRule('staff'); });
+staffGizmo.addEventListener('objectChange', () => { keepOnTerrain(staffRoot); faceStaffToInstrument(); updateSightVisuals(); });
 staffGizmo.visible = false;
 scene.add(staffGizmo);
 
@@ -1083,13 +1080,14 @@ function refreshStaffGizmo() {
 function setStaffVisible(on) {
   staffOn = on;
   ensureStaff();
-  if (on && !lastValidPos.staff) placeStaffNearInstrument();
+  if (on && !staffPlaced) { placeStaffNearInstrument(); staffPlaced = true; }
   staffRoot.visible = on;
   const btn = document.getElementById('staffToggle');
   btn.classList.toggle('active', on);
   btn.textContent = on ? 'Hide Staff' : 'Show Staff';
   refreshStaffGizmo();
-  ensureSightPair();
+  faceStaffToInstrument();
+  updateSightVisuals();
 }
 
 document.getElementById('staffToggle').addEventListener('click', () => setStaffVisible(!staffOn));
@@ -1162,15 +1160,15 @@ document.querySelectorAll('.overlay-row').forEach(row => {
             g.scene.position.set(c.x, g.scene.position.y, c.z);
           }
           snapToTerrain(g.scene);
-          lastValidPos.tripod = g.scene.position.clone();
           refreshTripodGizmoAttachment();
-          ensureSightPair();
+          faceStaffToInstrument();
+          updateSightVisuals();
         }
       }, undefined, (err) => { loadingEl.textContent = 'Overlay failed: ' + err; });
     } else if (overlayRoots[file]) {
       overlayRoots[file].visible = on;
       if (file === EXCAVATOR_FILE) updateExcavatorForStage();
-      if (file === TRIPOD_FILE) { refreshTripodGizmoAttachment(); ensureSightPair(); }
+      if (file === TRIPOD_FILE) { refreshTripodGizmoAttachment(); faceStaffToInstrument(); updateSightVisuals(); }
     }
   });
 });
@@ -1356,9 +1354,10 @@ function loadStage(idx) {
     // new stage = new terrain: re-seat the survey gear on it and make sure
     // the staff is still within the instrument's sight
     const tripodRoot = overlayRoots[TRIPOD_FILE];
-    if (tripodRoot) { snapToTerrain(tripodRoot); lastValidPos.tripod = tripodRoot.position.clone(); }
+    if (tripodRoot) snapToTerrain(tripodRoot);
     if (staffRoot) snapToTerrain(staffRoot);
-    ensureSightPair();
+    faceStaffToInstrument();
+    updateSightVisuals();
     updateLevelIntersection();
     // survey gear is the point of this tool: show the dumpy level and the
     // staff from the start (once, on the first stage load)
