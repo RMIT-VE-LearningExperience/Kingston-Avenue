@@ -268,11 +268,11 @@ function keepOnTerrain(obj) {
 // ---- levelling staff (3 m E-pattern staff) + line-of-sight readout ----
 // The dumpy level sights along a horizontal line at the instrument top. The
 // staff is readable only while that line crosses it: staff base <= sight
-// height <= staff base + 3 m. Staff and level move fully independently —
+// height <= staff base + 5 m. Staffs and level move fully independently —
 // students discover the staff is out of range and relocate the level
 // themselves (differential levelling practice). The panel and sight line
 // report readable vs out-of-range; nothing is clamped.
-const STAFF_HEIGHT = 3.0;
+const STAFF_HEIGHT = 5.0;
 const STAFF_COUNT = 2;
 const STAFF_COLORS = [0xd98a3d, 0x4a8db0];   // staff 1 orange, staff 2 blue (cap + foot)
 let surveyGearShown = false;      // dumpy level + staffs auto-shown on first stage load
@@ -283,25 +283,35 @@ let staffsPlaced = false;         // first-show placement done
 let staffMoveSel = -1;            // which staff the move gizmo drives (-1 = none)
 let staffAutoShowPending = false; // show staffs once the instrument has loaded
 
+// Real metric E-staff face: per decimetre an E-figure (three 1 cm bars +
+// spine, 5 cm tall) with two 1 cm blocks above it, and the running
+// two-digit decimetre number (03 = 0.3 m, 27 = 2.7 m) on the other side.
+// E side and number side swap every decimetre; metres alternate black/red.
 function makeStaffTexture(mirror) {
   const PXM = 512;                // pixels per metre
+  const CM = PXM / 100;
   const c = document.createElement('canvas');
   c.width = 128; c.height = PXM * STAFF_HEIGHT;
   const g = c.getContext('2d');
   g.fillStyle = '#f7f6f1'; g.fillRect(0, 0, c.width, c.height);
+  const yTopOf = (metres) => c.height - metres * PXM;   // canvas y for a height
   for (let m = 0; m < STAFF_HEIGHT; m++) {
-    g.fillStyle = (m % 2) ? '#c8102e' : '#1a1a1a';   // alternate black / red metres
+    g.fillStyle = (m % 2) ? '#c8102e' : '#141414';      // black / red metres
     for (let dm = 0; dm < 10; dm++) {
-      const cell = PXM / 10;
-      const cellTop = c.height - (m + (dm + 1) / 10) * PXM;
-      const bar = cell / 5;
-      // E-pattern block on the left, decimetre digit on the right
-      g.fillRect(6, cellTop, 44, bar);
-      g.fillRect(6, cellTop + 2 * bar, 44, bar);
-      g.fillRect(6, cellTop + 4 * bar, 44, bar);
-      g.fillRect(6, cellTop, 12, cell);
-      g.font = 'bold 34px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle';
-      g.fillText(String(dm), 88, cellTop + cell / 2);
+      const base = m + dm / 10;
+      const left = dm % 2 === 0;   // E on the left for even decimetres
+      const ex = left ? 6 : 62;    // E column x
+      const EW = 60;
+      // E-figure: bars at 0–1, 2–3, 4–5 cm joined by a spine on the outer edge
+      for (const k of [0, 2, 4])
+        g.fillRect(ex, yTopOf(base + (k + 1) / 100), EW, CM);
+      g.fillRect(left ? ex : ex + EW - 14, yTopOf(base + 0.05), 14, 5 * CM);
+      // block pair at 6–7 and 8–9 cm, offset like the real print
+      g.fillRect(ex + 8, yTopOf(base + 0.07), 30, CM);
+      g.fillRect(ex + 26, yTopOf(base + 0.09), 30, CM);
+      // running decimetre number on the opposite side, upper half of the cell
+      g.font = 'bold 38px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(String(m) + String(dm), left ? 96 : 32, yTopOf(base + 0.075));
     }
   }
   const tex = new THREE.CanvasTexture(c);
@@ -467,7 +477,7 @@ scene.add(staffGizmo);
 // range = the scope shows dirt or sky.
 const scopeCamera = new THREE.PerspectiveCamera(3, 1, 0.05, 500);
 let scopeSel = -1;
-const SCOPE_SIZE = 280, SCOPE_RIGHT = 64, SCOPE_TOP = 120;
+const SCOPE_SIZE = 420, SCOPE_RIGHT = 64, SCOPE_TOP = 120;
 
 function selectScope(i) {
   scopeSel = (scopeSel === i) ? -1 : i;
@@ -487,8 +497,9 @@ function renderScopeInset() {
   if (dist < 0.5) return;
   scopeCamera.position.set(t.position.x, sightY, t.position.z);
   scopeCamera.lookAt(st.position.x, sightY, st.position.z);
-  // frame ~0.6 m of staff whatever the distance (auto "magnification")
-  scopeCamera.fov = THREE.MathUtils.clamp(2 * Math.atan(0.30 / dist) * 180 / Math.PI, 0.4, 25);
+  // frame ~0.28 m of staff whatever the distance — with the 420 px inset
+  // that is ~1.5 px/mm, enough to estimate readings to the millimetre
+  scopeCamera.fov = THREE.MathUtils.clamp(2 * Math.atan(0.14 / dist) * 180 / Math.PI, 0.2, 25);
   scopeCamera.updateProjectionMatrix();
   // the sight marker/line would cover the reading — hide during this pass
   const vis = sightLines.map(l => l.visible);
@@ -580,16 +591,15 @@ function buildBoundaryOutline() {
 }
 
 // ---- structural setout grid (drawing A.02), rides the level plane ----
-// Numbered lines 1/2/3 run parallel to the east boundary, dimensioned west
-// from it (chain 12990/8390/5500). Lettered lines A–E run across the site,
-// dimensioned up the east boundary from the setout point at its south-east
-// corner (E +1000, D +7590, C +12680, B +20140, A +21850). Grid 3 lands on
-// the SPW4 wall line and grid E on the slab's south edge — both checks pass.
-// A and B belong to the wider west part of the parcel and float north of
-// the modeled terrain block.
-const GRID_NUM = [{ label: '1', d: 26.88 }, { label: '2', d: 13.89 }, { label: '3', d: 5.50 }];
-const GRID_LET = [{ label: 'A', d: 21.85 }, { label: 'B', d: 20.14 }, { label: 'C', d: 12.68 },
-                  { label: 'D', d: 7.59 }, { label: 'E', d: 1.00 }];
+// The grid is referenced to the BUILDING (the slab footprint the level-plane
+// outline is based on): the drawing's chains put grid 1 on the building's
+// west wall line and grid E on its south wall line. Numbered lines east of
+// grid 1 (chain 12990/8390); lettered lines north of grid E (chains
+// 6590/5090/7460/1710). A and B belong to the wider west part of the parcel
+// and float north of the modeled terrain block.
+const GRID_NUM = [{ label: '1', d: 0.0 }, { label: '2', d: 12.99 }, { label: '3', d: 21.38 }];
+const GRID_LET = [{ label: 'E', d: 0.0 }, { label: 'D', d: 6.59 }, { label: 'C', d: 11.68 },
+                  { label: 'B', d: 19.14 }, { label: 'A', d: 20.85 }];
 const gridGroup = new THREE.Group();
 gridGroup.visible = false;
 gridGroup.renderOrder = 15;
@@ -621,9 +631,11 @@ function buildSetoutGrid(hull) {
   const xs = hull.map(q => q[0]), zs = hull.map(q => q[1]);
   const eastX = Math.max(...xs);
   const westX = Math.min(...xs);
-  // setout corner z: southernmost hull point near the east edge
-  const southZ = Math.min(...hull.filter(q => q[0] > eastX - 2).map(q => q[1]));
+  const southZ = Math.min(...zs);
   const northZ = Math.max(...zs);
+  // anchor: the building's west and south wall lines from the slab footprint
+  const slabX = Math.min(...SLAB_FOOTPRINT.map(q => q[0]));
+  const slabZ = Math.min(...SLAB_FOOTPRINT.map(q => q[1]));
   const mat = () => new THREE.LineDashedMaterial({ color: 0xbfc2c7, dashSize: 0.45, gapSize: 0.3,
                                                    transparent: true, opacity: 0.85 });
   const addLine = (p1, p2, label) => {
@@ -637,11 +649,11 @@ function buildSetoutGrid(hull) {
     }
   };
   GRID_NUM.forEach(gl => {
-    const x = eastX - gl.d;
+    const x = slabX + gl.d;
     addLine(new THREE.Vector3(x, 0, southZ - 2.2), new THREE.Vector3(x, 0, northZ + 2.2), gl.label);
   });
   GRID_LET.forEach(gl => {
-    const z = southZ + gl.d;
+    const z = slabZ + gl.d;
     addLine(new THREE.Vector3(westX - 2.2, 0, z), new THREE.Vector3(eastX + 2.2, 0, z), gl.label);
   });
 }

@@ -571,7 +571,7 @@ button.active { background: var(--accent); color: #1e1f22; border-color: var(--a
 #scopeView {
   position: absolute;
   top: 120px; right: 64px;
-  width: 280px; height: 280px;
+  width: 420px; height: 420px;
   z-index: 7;
   pointer-events: none;
 }
