@@ -265,7 +265,7 @@ function keepOnTerrain(obj) {
   else if (lastGroundPos.has(obj)) obj.position.copy(lastGroundPos.get(obj));
 }
 
-// ---- levelling staff (3 m E-pattern staff) + line-of-sight readout ----
+// ---- fixed levelling staffs + line-of-sight readout ----
 // The dumpy level sights along a horizontal line at the instrument top. The
 // staff is readable only while that line crosses it: staff base <= sight
 // height <= staff base + 5 m. Staffs and level move fully independently —
@@ -273,14 +273,25 @@ function keepOnTerrain(obj) {
 // themselves (differential levelling practice). The panel and sight line
 // report readable vs out-of-range; nothing is clamped.
 const STAFF_HEIGHT = 5.0;
-const STAFF_COUNT = 2;
-const STAFF_COLORS = [0xd98a3d, 0x4a8db0];   // staff 1 orange, staff 2 blue (cap + foot)
+const STAFF_POINTS = [
+  { label: 'North-west corner', short: 'NW', x: 7.30, z: 0.75 },
+  { label: 'North return', short: 'NR', x: 20.49, z: 0.22 },
+  { label: 'East outer corner', short: 'EO', x: 32.32, z: -7.48 },
+  { label: 'East return', short: 'ER', x: 28.40, z: -7.49 },
+  { label: 'South return', short: 'SR', x: 29.62, z: -14.74 },
+  { label: 'South-east corner', short: 'SE', x: 29.64, z: -16.08 },
+  { label: 'South-west corner', short: 'SW', x: 10.93, z: -16.03 },
+  { label: 'West return', short: 'WR', x: 7.32, z: -1.69 }
+];
+const STAFF_COUNT = STAFF_POINTS.length;
+const STAFF_COLORS = [0xd98a3d, 0x4a8db0, 0x6da85a, 0xb56ca8, 0xc6a43d, 0x4faaa0, 0xcf6b5f, 0x7d82c8];
+const MAX_SIGHT_DISTANCE = 22;
+const MIN_SIGHT_DISTANCE = 1.5;
 let surveyGearShown = false;      // dumpy level + staffs auto-shown on first stage load
 let instrumentTop = 1.70;         // model ground->top; measured from the GLB on load
 let staffs = [];                  // groups, base at local Y=0
 let staffOn = false;
 let staffsPlaced = false;         // first-show placement done
-let staffMoveSel = -1;            // which staff the move gizmo drives (-1 = none)
 let staffAutoShowPending = false; // show staffs once the instrument has loaded
 
 // Real metric E-staff face: per decimetre an E-figure (three 1 cm bars +
@@ -375,19 +386,39 @@ function sightState(i) {
   if (!t || !t.visible || !s || !s.visible) return null;
   const sightY = t.position.y + instrumentTop;
   const base = s.position.y;
-  return { t, s, sightY, base, ok: base <= sightY && sightY <= base + STAFF_HEIGHT };
+  const distance = Math.hypot(s.position.x - t.position.x, s.position.z - t.position.z);
+  const verticalOk = base <= sightY && sightY <= base + STAFF_HEIGHT;
+  const distanceOk = distance >= MIN_SIGHT_DISTANCE && distance <= MAX_SIGHT_DISTANCE;
+  return { t, s, sightY, base, distance, verticalOk, distanceOk, ok: verticalOk && distanceOk };
+}
+
+function staffBand(reading) {
+  return String(Math.max(0, Math.floor((reading + 1e-6) * 10))).padStart(2, '0');
 }
 
 function updateSightVisuals() {
   const status = document.getElementById('staffStatus');
-  const lines = [];
+  let activeCount = 0;
+  let readableCount = 0;
   for (let i = 0; i < STAFF_COUNT; i++) {
     const st = sightState(i);
+    const readingEl = document.querySelector(`[data-staff-reading="${i}"]`);
+    const readButton = document.getElementById('staffScope' + i);
     if (!st) {
       sightLines[i].visible = sightMarks[i].visible = false;
-      lines.push('Staff ' + (i + 1) + ': —');
+      if (readButton) readButton.disabled = true;
+      if (readingEl) {
+        readingEl.textContent = 'Off';
+        readingEl.className = 'staff-reading';
+      }
       continue;
     }
+    activeCount++;
+    if (readButton) {
+      readButton.disabled = !st.ok;
+      readButton.title = st.ok ? `Read ${STAFF_POINTS[i].label}` : 'Relocate the tripod until this staff is readable';
+    }
+    if (!st.ok && scopeSel === i) selectScope(i);
     sightLines[i].geometry.setFromPoints([
       new THREE.Vector3(st.t.position.x, st.sightY, st.t.position.z),
       new THREE.Vector3(st.s.position.x, st.sightY, st.s.position.z)]);
@@ -397,14 +428,34 @@ function updateSightVisuals() {
     sightMarks[i].position.set(st.s.position.x, st.sightY, st.s.position.z);
     sightMarks[i].visible = st.ok;
     if (st.ok) {
-      lines.push('Staff ' + (i + 1) + ': ' + (st.sightY - st.base).toFixed(3) + ' m');
+      readableCount++;
+      const reading = st.sightY - st.base;
+      if (readingEl) {
+        readingEl.textContent = `${staffBand(reading)} · ${reading.toFixed(3)} m`;
+        readingEl.className = 'staff-reading readable';
+      }
+    } else if (!st.distanceOk) {
+      if (readingEl) {
+        readingEl.textContent = st.distance > MAX_SIGHT_DISTANCE ? 'Too far — relocate tripod' : 'Too close — relocate tripod';
+        readingEl.className = 'staff-reading unreadable';
+      }
     } else if (st.sightY > st.base + STAFF_HEIGHT) {
-      lines.push('Staff ' + (i + 1) + ': out of range — sight above staff (move level lower)');
+      if (readingEl) {
+        readingEl.textContent = 'Sight above staff';
+        readingEl.className = 'staff-reading unreadable';
+      }
     } else {
-      lines.push('Staff ' + (i + 1) + ': out of range — sight below staff base (move level higher)');
+      if (readingEl) {
+        readingEl.textContent = 'Sight below staff';
+        readingEl.className = 'staff-reading unreadable';
+      }
     }
   }
-  if (status) status.innerHTML = lines.join('<br>');
+  if (status) {
+    if (!activeCount) status.textContent = 'Select one or more fixed staff positions.';
+    else if (readableCount === activeCount) status.textContent = `${readableCount} of ${activeCount} active staffs readable.`;
+    else status.textContent = `${readableCount} of ${activeCount} readable — relocate the tripod to read the remaining staffs.`;
+  }
 }
 
 // every staff face turns toward the instrument, like a staffman would hold it
@@ -423,55 +474,16 @@ function terrainYAt(x, z) {
   return hit ? hit.point.y : null;
 }
 
-// initial placement only: staff 1 on high ground, staff 2 on low ground,
-// probing rings around the instrument — after this they are never moved
-// automatically
-function placeStaffsDefault() {
+// Place the staffs at the major corners and returns of the modeled building
+// footprint. These are fixed set-out points; students relocate the tripod.
+function placeStaffsFixed() {
   ensureStaffs();
-  const t = overlayRoots[TRIPOD_FILE];
-  let cx, cz;
-  if (t) { cx = t.position.x; cz = t.position.z; }
-  else if (groups.soil && groups.soil.length) {
-    const b = new THREE.Box3(); groups.soil.forEach(m => b.expandByObject(m));
-    const c = b.getCenter(new THREE.Vector3());
-    cx = c.x; cz = c.z;
-  } else { cx = 0; cz = 0; }
-  const samples = [];
-  for (const r of [6, 9, 12, 15]) {
-    for (let k = 0; k < 24; k++) {
-      const a = (k / 24) * Math.PI * 2;
-      const x = cx + r * Math.cos(a), z = cz + r * Math.sin(a);
-      const y = terrainYAt(x, z);
-      if (y !== null) samples.push({ x, y, z });
-    }
-  }
-  // prefer the highest / lowest spots that are still comfortably readable
-  // from the instrument (>= 0.3 m from either end of the staff), so both
-  // start with valid readings near the limits of the sight window
-  const sightY = t ? t.position.y + instrumentTop : null;
-  let highPool = samples, lowPool = samples;
-  if (sightY !== null) {
-    const h = samples.filter(q => q.y <= sightY - 0.3);
-    const l = samples.filter(q => q.y >= sightY - (STAFF_HEIGHT - 0.3));
-    if (h.length) highPool = h;
-    if (l.length) lowPool = l;
-  }
-  const high = highPool.reduce((a, b) => (!a || b.y > a.y) ? b : a, null);
-  const low = lowPool.reduce((a, b) => (!a || b.y < a.y) ? b : a, null);
-  if (high) staffs[0].position.set(high.x, high.y, high.z);
-  else staffs[0].position.set(cx + 4, 0, cz);
-  if (low) staffs[1].position.set(low.x, low.y, low.z);
-  else staffs[1].position.set(cx - 4, 0, cz);
-  staffs.forEach(s => snapToTerrain(s));
+  staffs.forEach((staff, i) => {
+    const point = STAFF_POINTS[i];
+    staff.position.set(point.x, terrainYAt(point.x, point.z) ?? 0, point.z);
+    snapToTerrain(staff);
+  });
 }
-
-const staffGizmo = new TransformControls(camera, renderer.domElement);
-staffGizmo.setMode('translate');
-staffGizmo.showY = false;                        // XZ drag; Y follows the terrain
-staffGizmo.addEventListener('dragging-changed', (e) => { controls.enabled = !e.value; });
-staffGizmo.addEventListener('objectChange', () => { keepOnTerrain(staffs[staffMoveSel]); faceStaffsToInstrument(); updateSightVisuals(); });
-staffGizmo.visible = false;
-scene.add(staffGizmo);
 
 // ---- telescope (scope) view: read the staff through the instrument ----
 // A circular inset renders the scene from the instrument's optical axis,
@@ -483,11 +495,16 @@ let scopeSel = -1;
 const SCOPE_SIZE = 420, SCOPE_RIGHT = 64, SCOPE_TOP = 120;
 
 function selectScope(i) {
+  if (scopeSel !== i && !sightState(i)?.ok) return;
   scopeSel = (scopeSel === i) ? -1 : i;
-  for (let k = 0; k < STAFF_COUNT; k++)
-    document.getElementById('staffScope' + k).classList.toggle('active', k === scopeSel);
+  for (let k = 0; k < STAFF_COUNT; k++) {
+    document.getElementById('staffScope' + k)?.classList.toggle('active', k === scopeSel);
+  }
   document.getElementById('scopeView').style.display = scopeSel >= 0 ? 'block' : 'none';
-  if (scopeSel >= 0) { autoRotateCamera = false; if (!staffOn) setStaffsVisible(true); }
+  if (scopeSel >= 0) {
+    autoRotateCamera = false;
+    if (!staffs[scopeSel]?.visible) setStaffVisible(scopeSel, true);
+  }
 }
 
 function renderScopeInset() {
@@ -596,10 +613,9 @@ function buildBoundaryOutline() {
 // ---- structural setout grid (drawing A.02), rides the level plane ----
 // The grid is referenced to the BUILDING (the slab footprint the level-plane
 // outline is based on): the drawing's chains put grid 1 on the building's
-// west wall line and grid E on its south wall line. Numbered lines east of
-// grid 1 (chain 12990/8390); lettered lines north of grid E (chains
-// 6590/5090/7460/1710). A and B belong to the wider west part of the parcel
-// and float north of the modeled terrain block.
+// west wall line and grid E on its south wall line. Numbered lines run away
+// from the river (chains 12990/8390); lettered lines face the river and run
+// north from E (chains 6590/5090/7460/1710).
 const GRID_NUM = [{ label: '1', d: 0.0 }, { label: '2', d: 12.99 }, { label: '3', d: 21.38 }];
 const GRID_LET = [{ label: 'E', d: 0.0 }, { label: 'D', d: 6.59 }, { label: 'C', d: 11.68 },
                   { label: 'B', d: 19.14 }, { label: 'A', d: 20.85 }];
@@ -631,38 +647,44 @@ function buildSetoutGrid(hull) {
     if (o.material && o.material.map) o.material.map.dispose();
     gridGroup.remove(o);
   });
-  // the grid belongs to the BUILDING: lines span the slab footprint (plus a
-  // small margin for the bubbles), not the whole terrain, and lines that
-  // fall outside the building envelope (grid A/B, which serve the parcel's
-  // west part) are not drawn
+  // A.02 shows the complete grid over the site, not just over the building.
+  // Use the terrain hull for line extents so the A/B axes remain visible.
   const slabMinX = Math.min(...SLAB_FOOTPRINT.map(q => q[0]));
-  const slabMaxX = Math.max(...SLAB_FOOTPRINT.map(q => q[0]));
   const slabMinZ = Math.min(...SLAB_FOOTPRINT.map(q => q[1]));
-  const slabMaxZ = Math.max(...SLAB_FOOTPRINT.map(q => q[1]));
-  const M = 1.5;                   // bubble margin beyond the building line
+  const terrainMinX = Math.min(...hull.map(q => q[0]));
+  const terrainMaxX = Math.max(...hull.map(q => q[0]));
+  const terrainMinZ = Math.min(...hull.map(q => q[1]));
+  const terrainMaxZ = Math.max(...hull.map(q => q[1]));
+  const M = 1.1;
   const mat = () => new THREE.LineDashedMaterial({ color: 0xbfc2c7, dashSize: 0.45, gapSize: 0.3,
                                                    transparent: true, opacity: 0.85, depthTest: false });
-  const addLine = (p1, p2, label) => {
+  const addLine = (p1, p2, label, bubbleEnd) => {
     const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([p1, p2]), mat());
     line.computeLineDistances();
     line.renderOrder = 20;         // depthTest off: visible inside the terrain
     gridGroup.add(line);
-    for (const end of [p1, p2]) {
-      const b = makeGridBubble(label);
-      b.position.copy(end);
-      b.renderOrder = 21;
-      gridGroup.add(b);
-    }
+    const b = makeGridBubble(label);
+    b.position.copy(bubbleEnd === 0 ? p1 : p2);
+    b.renderOrder = 21;
+    gridGroup.add(b);
   };
   GRID_NUM.forEach(gl => {
     const x = slabMinX + gl.d;
-    if (x < slabMinX - 0.1 || x > slabMaxX + 0.1) return;
-    addLine(new THREE.Vector3(x, 0, slabMinZ - M), new THREE.Vector3(x, 0, slabMaxZ + M), gl.label);
+    addLine(
+      new THREE.Vector3(x, 0, terrainMinZ - M),
+      new THREE.Vector3(x, 0, terrainMaxZ + M),
+      gl.label,
+      1
+    );
   });
   GRID_LET.forEach(gl => {
     const z = slabMinZ + gl.d;
-    if (z < slabMinZ - 0.1 || z > slabMaxZ + 0.1) return;
-    addLine(new THREE.Vector3(slabMinX - M, 0, z), new THREE.Vector3(slabMaxX + M, 0, z), gl.label);
+    addLine(
+      new THREE.Vector3(terrainMinX - M, 0, z),
+      new THREE.Vector3(terrainMaxX + M, 0, z),
+      gl.label,
+      0
+    );
   });
 }
 
@@ -1308,42 +1330,70 @@ document.getElementById('tripodMove').addEventListener('click', () => setTripodG
 document.getElementById('tripodRotate').addEventListener('click', () => setTripodGizmoMode('rotate'));
 setTripodGizmoMode('translate');
 
-// ---- levelling staffs wiring ----
-function refreshStaffGizmo() {
-  const sel = staffs[staffMoveSel];
-  if (staffMoveSel >= 0 && sel && sel.visible) {
-    staffGizmo.attach(sel); staffGizmo.visible = true;
-  } else {
-    staffGizmo.detach(); staffGizmo.visible = false;
+// ---- fixed levelling staffs wiring ----
+function ensureStaffPlacement() {
+  ensureStaffs();
+  if (!staffsPlaced) {
+    placeStaffsFixed();
+    staffsPlaced = true;
   }
 }
 
-function setStaffsVisible(on) {
-  staffOn = on;
-  ensureStaffs();
-  if (on && !staffsPlaced) { placeStaffsDefault(); staffsPlaced = true; }
-  staffs.forEach(s => s.visible = on);
-  const btn = document.getElementById('staffToggle');
-  btn.classList.toggle('active', on);
-  btn.textContent = on ? 'Hide Staffs' : 'Show Staffs';
-  refreshStaffGizmo();
+function syncStaffControls() {
+  staffOn = staffs.some(staff => staff.visible);
+  const allOn = staffs.length > 0 && staffs.every(staff => staff.visible);
+  document.getElementById('staffToggle').classList.toggle('active', allOn);
+  staffs.forEach((staff, i) => {
+    const checkbox = document.getElementById('staffVisible' + i);
+    const row = document.querySelector(`[data-staff-row="${i}"]`);
+    const read = document.getElementById('staffScope' + i);
+    if (checkbox) checkbox.checked = staff.visible;
+    row?.classList.toggle('on', staff.visible);
+    if (read) read.disabled = !staff.visible;
+  });
+}
+
+function setStaffVisible(i, on) {
+  ensureStaffPlacement();
+  staffs[i].visible = on;
+  if (!on && scopeSel === i) selectScope(i);
+  syncStaffControls();
   faceStaffsToInstrument();
   updateSightVisuals();
 }
 
-function selectStaffMove(i) {
-  staffMoveSel = (staffMoveSel === i) ? -1 : i;
-  if (staffMoveSel >= 0) { autoRotateCamera = false; if (!staffOn) setStaffsVisible(true); }
-  for (let k = 0; k < STAFF_COUNT; k++)
-    document.getElementById('staffMove' + k).classList.toggle('active', k === staffMoveSel);
-  refreshStaffGizmo();
+function setStaffsVisible(on) {
+  ensureStaffPlacement();
+  staffs.forEach(staff => { staff.visible = on; });
+  if (!on && scopeSel >= 0) selectScope(scopeSel);
+  syncStaffControls();
+  faceStaffsToInstrument();
+  updateSightVisuals();
 }
 
-document.getElementById('staffToggle').addEventListener('click', () => setStaffsVisible(!staffOn));
-document.getElementById('staffMove0').addEventListener('click', () => selectStaffMove(0));
-document.getElementById('staffMove1').addEventListener('click', () => selectStaffMove(1));
-document.getElementById('staffScope0').addEventListener('click', () => selectScope(0));
-document.getElementById('staffScope1').addEventListener('click', () => selectScope(1));
+function buildStaffControls() {
+  const list = document.getElementById('staffList');
+  list.innerHTML = '';
+  STAFF_POINTS.forEach((point, i) => {
+    const row = document.createElement('div');
+    row.className = 'staff-item';
+    row.dataset.staffRow = i;
+    row.innerHTML = `
+      <input class="staff-switch" id="staffVisible${i}" type="checkbox" aria-label="Show ${point.label}">
+      <label class="staff-name" for="staffVisible${i}">
+        <b>${point.short} · ${point.label}</b>
+        <span class="staff-reading" data-staff-reading="${i}">Off</span>
+      </label>
+      <button class="staff-read" id="staffScope${i}" type="button" disabled>Read</button>`;
+    list.appendChild(row);
+    row.querySelector('.staff-switch').addEventListener('change', event => setStaffVisible(i, event.target.checked));
+    row.querySelector('.staff-read').addEventListener('click', () => selectScope(i));
+  });
+}
+
+buildStaffControls();
+document.getElementById('staffToggle').addEventListener('click', () => setStaffsVisible(true));
+document.getElementById('staffHideAll').addEventListener('click', () => setStaffsVisible(false));
 
 function setLevelActive(on) {
   levelActive = on;
