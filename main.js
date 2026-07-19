@@ -5,6 +5,7 @@ import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
 import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
+import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 
 // ---- eye icons (open = visible, closed = hidden) ----
 const EYE_OPEN = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
@@ -50,6 +51,18 @@ viewport.appendChild(renderer.domElement);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
+
+const controllerModelFactory = new XRControllerModelFactory();
+const controller1 = renderer.xr.getController(0);
+const controller2 = renderer.xr.getController(1);
+const controllerGrip1 = renderer.xr.getControllerGrip(0);
+const controllerGrip2 = renderer.xr.getControllerGrip(1);
+controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
+controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
+scene.add(controller1);
+scene.add(controller2);
+scene.add(controllerGrip1);
+scene.add(controllerGrip2);
 
 // ---- viewport orientation gizmo ----
 const viewGizmoScene = new THREE.Scene();
@@ -1306,6 +1319,7 @@ const VR_TARGET_CENTER = new THREE.Vector3(0, 1.25, -4.2);
 const vrModelCenter = new THREE.Vector3();
 const vrRotatedCenter = new THREE.Vector3();
 const vrInputState = new Map();
+const vrStickMove = new THREE.Vector3();
 
 function updateVrButton(active) {
   vrToggle.classList.toggle('active', active);
@@ -1319,7 +1333,7 @@ function applyVrWorldTransform() {
   vrWorld.scale.setScalar(vrScale);
   vrWorld.rotation.set(0, vrYaw, 0);
   vrRotatedCenter.copy(vrModelCenter).multiplyScalar(vrScale).applyAxisAngle(new THREE.Vector3(0, 1, 0), vrYaw);
-  vrWorld.position.copy(VR_TARGET_CENTER).sub(vrRotatedCenter);
+  vrWorld.position.copy(VR_TARGET_CENTER).add(vrStickMove).sub(vrRotatedCenter);
 }
 
 function resetVrWorldTransform() {
@@ -1331,6 +1345,7 @@ function resetVrWorldTransform() {
 function configureVrView() {
   vrYaw = 0;
   vrScale = 0.08;
+  vrStickMove.set(0, 0, 0);
   applyVrWorldTransform();
 }
 
@@ -1340,8 +1355,17 @@ function changeStage(delta) {
   if (next !== stageIndex) loadStage(next);
 }
 
-function pressedButton(gamepad) {
-  return gamepad?.buttons?.some(button => button.pressed) || false;
+function isButtonPressed(gamepad, index) {
+  return !!gamepad?.buttons?.[index]?.pressed;
+}
+
+function vrButtonStateFor(source) {
+  let state = vrInputState.get(source);
+  if (!state) {
+    state = { axes: false, a: false, b: false };
+    vrInputState.set(source, state);
+  }
+  return state;
 }
 
 function updateVrControllerInput() {
@@ -1350,6 +1374,7 @@ function updateVrControllerInput() {
   for (const source of xrSession.inputSources) {
     const gamepad = source.gamepad;
     if (!gamepad) continue;
+    const state = vrButtonStateFor(source);
 
     const axes = gamepad.axes || [];
     let x = 0;
@@ -1363,18 +1388,35 @@ function updateVrControllerInput() {
       }
     }
 
-    if (x || y) {
-      vrYaw -= x * 0.035;
-      vrScale = THREE.MathUtils.clamp(vrScale * (1 - y * 0.035), VR_MIN_SCALE, VR_MAX_SCALE);
+    if (source.handedness === 'right') {
+      if (x || y) {
+        vrYaw -= x * 0.035;
+        vrScale = THREE.MathUtils.clamp(vrScale * (1 - y * 0.035), VR_MIN_SCALE, VR_MAX_SCALE);
+        applyVrWorldTransform();
+      }
+    } else if (source.handedness === 'left' && y) {
+      vrStickMove.y += y * 0.03;
+      vrStickMove.y = THREE.MathUtils.clamp(vrStickMove.y, -1.6, 1.6);
       applyVrWorldTransform();
     }
 
-    const isPressed = pressedButton(gamepad);
-    const wasPressed = vrInputState.get(source) || false;
-    if (isPressed && !wasPressed) {
-      changeStage(source.handedness === 'left' ? -1 : 1);
+    const aPressed = source.handedness === 'right' && (
+      isButtonPressed(gamepad, 4) ||
+      (gamepad.buttons.length > 5 && isButtonPressed(gamepad, gamepad.buttons.length - 2))
+    );
+    const bPressed = source.handedness === 'right' && (
+      isButtonPressed(gamepad, 5) ||
+      (gamepad.buttons.length > 5 && isButtonPressed(gamepad, gamepad.buttons.length - 1))
+    );
+    if (aPressed && !state.a) {
+      changeStage(1);
     }
-    vrInputState.set(source, isPressed);
+    if (bPressed && !state.b) {
+      changeStage(-1);
+    }
+    state.a = aPressed;
+    state.b = bPressed;
+    state.axes = !!(x || y);
   }
 }
 
