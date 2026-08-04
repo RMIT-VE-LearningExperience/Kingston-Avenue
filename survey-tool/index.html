@@ -27,6 +27,8 @@
         <span class="panel-status"><i></i>NGL</span>
       </header>
 
+      <button id="levelToggle" class="wide level-primary">Show Level Plane</button>
+
       <details class="menu-group" open>
         <summary>
           <span><b>Survey setup</b><small>Position the dumpy level</small></span>
@@ -115,12 +117,10 @@
 
       <details class="menu-group">
         <summary>
-          <span><b>Other tools</b><small>Level plane &amp; measure</small></span>
+          <span><b>Measurement</b><small>Distance tools</small></span>
         </summary>
         <div class="menu-content">
-          <button id="levelToggle" class="wide">Show Level Plane</button>
           <div class="subsection">
-            <label class="section-label">Measurement</label>
             <button id="measureClear" class="wide">Clear measurement</button>
             <div id="measureStatus" class="tool-status">Click two points on the model</div>
           </div>
@@ -159,13 +159,6 @@
               <path d="M4 8.5 12 4l8 4.5-8 4.5z" />
               <path d="M4 15.5 12 20l8-4.5" />
               <path d="M4 12 12 16.5 20 12" />
-            </svg>
-          </button>
-          <button id="vrToggle" class="round-tool" aria-label="Enter VR" title="Enter VR">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M5.5 8.5h13A2.5 2.5 0 0 1 21 11v4.5a2 2 0 0 1-2 2h-2.1a2.5 2.5 0 0 1-2.1-1.1l-.8-1.2a2.4 2.4 0 0 0-4 0l-.8 1.2a2.5 2.5 0 0 1-2.1 1.1H5a2 2 0 0 1-2-2V11a2.5 2.5 0 0 1 2.5-2.5z" />
-              <path d="M7.5 12.5h3" />
-              <path d="M13.5 12.5h3" />
             </svg>
           </button>
           <button id="helpTourToggle" class="round-tool" aria-label="Open help" title="Help">

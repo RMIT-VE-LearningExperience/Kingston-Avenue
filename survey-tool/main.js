@@ -272,7 +272,8 @@ function keepOnTerrain(obj) {
 // students discover the staff is out of range and relocate the level
 // themselves (differential levelling practice). The panel and sight line
 // report readable vs out-of-range; nothing is clamped.
-const STAFF_HEIGHT = 5.0;
+const STAFF_HEIGHT = 5.0;          // maximum readable graduation
+const STAFF_BODY_HEIGHT = 5.1;     // includes the complete red 50 band above 5.000 m
 const STAFF_POINTS = [
   { label: 'North-west corner', short: 'NW', x: 7.30, z: 0.75 },
   { label: 'North return', short: 'NR', x: 20.49, z: 0.22 },
@@ -294,62 +295,115 @@ let staffOn = false;
 let staffsPlaced = false;         // first-show placement done
 let staffAutoShowPending = false; // show staffs once the instrument has loaded
 
-// Real metric E-staff face: per decimetre an E-figure (three 1 cm bars +
-// spine, 5 cm tall) with two 1 cm blocks above it, and the running
-// two-digit decimetre number (03 = 0.3 m, 27 = 2.7 m) on the other side.
-// E side and number side swap every decimetre; metres alternate black/red.
+// Real metric E-staff face. Every numbered section is exactly 100 mm:
+// a 50 mm E made from 10 mm strokes sits on the section line, followed by
+// two 10 x 10 mm squares. The E and number swap sides each decimetre.
+// Only the full-metre graduations (10, 20, 30, 40 and 50) are red.
 function makeStaffTexture(mirror) {
-  const PXM = 512;                // pixels per metre
-  const CM = PXM / 100;
+  const PX_PER_MM = 0.8;          // 5100 mm -> 4080 px, safe on 4096 px GPUs
+  const STAFF_WIDTH_MM = 100;
+  const PRINT_HEIGHT_MM = 5100;
+  const SECTION_MM = 100;
+  const E_HEIGHT_MM = 50;
+  const STROKE_MM = 10;
+  const CENTRE_MM = STAFF_WIDTH_MM / 2;
+  const OUTER_MARGIN_MM = 5;
+  const BLACK = '#171817';
+  const RED = '#c7192d';
   const c = document.createElement('canvas');
-  c.width = 128; c.height = PXM * STAFF_HEIGHT;
+  c.width = Math.round(STAFF_WIDTH_MM * PX_PER_MM);
+  c.height = Math.round(PRINT_HEIGHT_MM * PX_PER_MM);
   const g = c.getContext('2d');
-  g.fillStyle = '#f7f6f1'; g.fillRect(0, 0, c.width, c.height);
-  const yTopOf = (metres) => c.height - metres * PXM;   // canvas y for a height
-  // thin centre hairline separating the E column from the number column
-  g.fillStyle = '#141414'; g.fillRect(63, 0, 2, c.height);
-  for (let m = 0; m < STAFF_HEIGHT; m++) {
-    g.fillStyle = (m % 2) ? '#c8102e' : '#141414';      // black / red metres
-    for (let dm = 0; dm < 10; dm++) {
-      const base = m + dm / 10;
-      const left = dm % 2 === 0;   // E on the left for even decimetres
-      const ex = left ? 6 : 62;    // E column x
-      const EW = 60;
-      // E-figure: bars at 0–1, 2–3, 4–5 cm joined by a spine on the outer edge
-      for (const k of [0, 2, 4])
-        g.fillRect(ex, yTopOf(base + (k + 1) / 100), EW, CM);
-      g.fillRect(left ? ex : ex + EW - 14, yTopOf(base + 0.05), 14, 5 * CM);
-      // block pair at 6–7 and 8–9 cm, offset like the real print
-      g.fillRect(ex + 8, yTopOf(base + 0.07), 30, CM);
-      g.fillRect(ex + 26, yTopOf(base + 0.09), 30, CM);
-      // running decimetre number LEVEL with its E on the opposite side,
-      // number base on the decimetre line — like the real face
-      g.font = 'bold 46px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle';
-      g.fillText(String(m) + String(dm), left ? 97 : 31, yTopOf(base + 0.025));
+  g.fillStyle = '#f2f2eb';
+  g.fillRect(0, 0, c.width, c.height);
+
+  const px = mm => mm * PX_PER_MM;
+  const yAt = mm => c.height - px(mm);
+  const fillMmRect = (xMm, bottomMm, widthMm, heightMm) => {
+    g.fillRect(px(xMm), yAt(bottomMm + heightMm), px(widthMm), px(heightMm));
+  };
+  const drawNumber = (label, centreMm, topMm) => {
+    const maxWidth = px(42);
+    g.save();
+    g.font = `700 ${px(40)}px "Arial Narrow", Arial, sans-serif`;
+    g.textAlign = 'center';
+    g.textBaseline = 'top';
+    const measured = g.measureText(label).width;
+    const scaleX = Math.min(1, maxWidth / measured);
+    g.translate(px(centreMm), yAt(topMm));
+    g.scale(scaleX, 1);
+    g.fillText(label, 0, 0);
+    g.restore();
+  };
+
+  for (let section = 0; section <= 50; section++) {
+    const baseMm = section * SECTION_MM;
+    const eOnLeft = section % 2 === 0;
+    const metreMark = section > 0 && section % 10 === 0;
+    const ink = metreMark ? RED : BLACK;
+
+    // Fine horizontal rule separates each 100 mm section. The bottom E bar
+    // overlays the rule on its half, so the E visibly sits on the line.
+    g.fillStyle = 'rgba(23, 24, 23, 0.24)';
+    fillMmRect(0, baseMm, STAFF_WIDTH_MM, 1);
+
+    g.fillStyle = ink;
+    const eOuterMm = eOnLeft ? OUTER_MARGIN_MM : CENTRE_MM;
+    const eWidthMm = CENTRE_MM - OUTER_MARGIN_MM;
+
+    // Three horizontal 10 mm strokes at 0, 20 and 40 mm.
+    for (const offsetMm of [0, 20, 40]) {
+      fillMmRect(eOuterMm, baseMm + offsetMm, eWidthMm, STROKE_MM);
     }
+
+    // The upright is on the outside edge; reversing it makes the next E
+    // face the opposite direction while both figures touch the centre line.
+    const spineXMm = eOnLeft
+      ? OUTER_MARGIN_MM
+      : STAFF_WIDTH_MM - OUTER_MARGIN_MM - STROKE_MM;
+    fillMmRect(spineXMm, baseMm, STROKE_MM, E_HEIGHT_MM);
+
+    // Two true 10 x 10 mm squares above the E. They align right on a
+    // left-hand E and left on a reversed right-hand E.
+    const squareXMm = eOnLeft ? CENTRE_MM - STROKE_MM : CENTRE_MM;
+    fillMmRect(squareXMm, baseMm + 60, STROKE_MM, STROKE_MM);
+    fillMmRect(squareXMm, baseMm + 80, STROKE_MM, STROKE_MM);
+
+    // Number top aligns with the top of the E on the opposite half.
+    drawNumber(String(section).padStart(2, '0'), eOnLeft ? 75 : 25, baseMm + E_HEIGHT_MM);
   }
+
+  // Complete the top edge of the 50 section.
+  g.fillStyle = 'rgba(23, 24, 23, 0.24)';
+  fillMmRect(0, PRINT_HEIGHT_MM - 1, STAFF_WIDTH_MM, 1);
+
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 8;
-  if (mirror) { tex.wrapS = THREE.RepeatWrapping; tex.repeat.x = -1; }
+  tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  if (mirror) {
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.repeat.x = -1;
+    tex.offset.x = 1;
+  }
   return tex;
 }
 
 function ensureStaffs() {
   if (staffs.length) return staffs;
+  const alu = new THREE.MeshStandardMaterial({ color: 0xd8d8d2, roughness: 0.5, metalness: 0.4 });
+  const faceFront = new THREE.MeshStandardMaterial({ map: makeStaffTexture(false), roughness: 0.85 });
+  const faceBack = new THREE.MeshStandardMaterial({ map: makeStaffTexture(true), roughness: 0.85 });
   for (let i = 0; i < STAFF_COUNT; i++) {
     const root = new THREE.Group();
-    const alu = new THREE.MeshStandardMaterial({ color: 0xd8d8d2, roughness: 0.5, metalness: 0.4 });
     const tint = new THREE.MeshStandardMaterial({ color: STAFF_COLORS[i], roughness: 0.6 });
-    const face = (mirror) => new THREE.MeshStandardMaterial({ map: makeStaffTexture(mirror), roughness: 0.85 });
     const body = new THREE.Mesh(
-      new THREE.BoxGeometry(0.10, STAFF_HEIGHT, 0.025),
-      [alu, alu, alu, alu, face(false), face(true)]
+      new THREE.BoxGeometry(0.10, STAFF_BODY_HEIGHT, 0.025),
+      [alu, alu, alu, alu, faceFront, faceBack]
     );
-    body.position.y = STAFF_HEIGHT / 2;
+    body.position.y = STAFF_BODY_HEIGHT / 2;
     root.add(body);
     const cap = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.07, 0.05), tint);
-    cap.position.y = STAFF_HEIGHT + 0.035;   // coloured cap tells the staffs apart
+    cap.position.y = STAFF_BODY_HEIGHT + 0.035;   // coloured cap tells the staffs apart
     root.add(cap);
     const foot = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.02, 0.06), tint);
     foot.position.y = 0.01;
@@ -419,15 +473,17 @@ function updateSightVisuals() {
       readButton.title = st.ok ? `Read ${STAFF_POINTS[i].label}` : 'Relocate the tripod until this staff is readable';
     }
     if (!st.ok && scopeSel === i) selectScope(i);
-    sightLines[i].geometry.setFromPoints([
-      new THREE.Vector3(st.t.position.x, st.sightY, st.t.position.z),
-      new THREE.Vector3(st.s.position.x, st.sightY, st.s.position.z)]);
-    sightLines[i].computeLineDistances();
-    sightLines[i].visible = true;
-    sightLines[i].material.color.set(st.ok ? 0xffcc44 : 0xff4444);
-    sightMarks[i].position.set(st.s.position.x, st.sightY, st.s.position.z);
-    sightMarks[i].visible = st.ok;
+    sightLines[i].visible = false;
+    sightMarks[i].visible = false;
     if (st.ok) {
+      sightLines[i].geometry.setFromPoints([
+        new THREE.Vector3(st.t.position.x, st.sightY, st.t.position.z),
+        new THREE.Vector3(st.s.position.x, st.sightY, st.s.position.z)]);
+      sightLines[i].computeLineDistances();
+      sightLines[i].material.color.set(0xffcc44);
+      sightLines[i].visible = true;
+      sightMarks[i].position.set(st.s.position.x, st.sightY, st.s.position.z);
+      sightMarks[i].visible = true;
       readableCount++;
       const reading = st.sightY - st.base;
       if (readingEl) {
@@ -1882,6 +1938,7 @@ const vrRotatedCenter = new THREE.Vector3();
 const vrInputState = new Map();
 
 function updateVrButton(active) {
+  if (!vrToggle) return;
   vrToggle.classList.toggle('active', active);
   vrToggle.setAttribute('aria-label', active ? 'Exit VR' : 'Enter VR');
   vrToggle.title = active ? 'Exit VR' : 'Enter VR';
@@ -1953,6 +2010,7 @@ function updateVrControllerInput() {
 }
 
 async function setupVrSupport() {
+  if (!vrToggle) return;
   if (!('xr' in navigator)) {
     vrToggle.disabled = true;
     vrToggle.title = 'VR requires a WebXR browser on a headset';
@@ -1970,7 +2028,7 @@ async function setupVrSupport() {
 }
 
 async function startVrSession() {
-  if (!navigator.xr || vrToggle.disabled) return;
+  if (!vrToggle || !navigator.xr || vrToggle.disabled) return;
   stopAutoRotate();
   clearMeasurement(false);
   configureVrView();
@@ -1995,7 +2053,7 @@ async function startVrSession() {
   }
 }
 
-vrToggle.addEventListener('click', () => {
+vrToggle?.addEventListener('click', () => {
   if (xrSession) xrSession.end();
   else startVrSession();
 });
