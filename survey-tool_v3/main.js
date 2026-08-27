@@ -496,26 +496,34 @@ function updateSightVisuals() {
       }
     } else if (!st.distanceOk) {
       if (readingEl) {
-        readingEl.textContent = st.distance > MAX_SIGHT_DISTANCE ? 'Too far — relocate tripod' : 'Too close — relocate tripod';
+        readingEl.textContent = st.distance > MAX_SIGHT_DISTANCE ? 'Too far' : 'Too close';
         readingEl.className = 'staff-reading unreadable';
       }
     } else if (st.sightY > st.base + STAFF_HEIGHT) {
       if (readingEl) {
-        readingEl.textContent = 'Sight above staff';
+        readingEl.textContent = 'Above staff';
         readingEl.className = 'staff-reading unreadable';
       }
     } else {
       if (readingEl) {
-        readingEl.textContent = 'Sight below staff';
+        readingEl.textContent = 'Below staff';
         readingEl.className = 'staff-reading unreadable';
       }
     }
   }
   if (status) {
-    if (!activeCount) status.textContent = 'Select one or more fixed staff positions.';
-    else if (readableCount === activeCount) status.textContent = `${readableCount} of ${activeCount} active staffs readable.`;
-    else status.textContent = `${readableCount} of ${activeCount} readable — relocate the tripod to read the remaining staffs.`;
+    if (!activeCount) status.textContent = 'Select one or more staff positions.';
+    else if (readableCount === activeCount) status.textContent = `${readableCount} of ${activeCount} readable`;
+    else status.textContent = `${readableCount} of ${activeCount} readable — move the level to read the rest`;
+    status.classList.toggle('all-ok', activeCount > 0 && readableCount === activeCount);
   }
+  const bar = document.getElementById('staffSummaryBar');
+  if (bar) bar.style.width = activeCount ? `${(readableCount / activeCount) * 100}%` : '0%';
+  const sh = document.getElementById('sightHeight');
+  const tripod = overlayRoots[TRIPOD_FILE];
+  if (sh) sh.textContent = (tripod && tripod.visible) ? `RL ${(tripod.position.y + instrumentTop).toFixed(3)} m` : '—';
+  document.getElementById('stepStaffs')?.classList.toggle('done', activeCount > 0 && readableCount === activeCount);
+  updateScopeCaption();
 }
 
 // every staff face turns toward the instrument, like a staffman would hold it
@@ -559,12 +567,29 @@ function selectScope(i) {
   scopeSel = (scopeSel === i) ? -1 : i;
   for (let k = 0; k < STAFF_COUNT; k++) {
     document.getElementById('staffScope' + k)?.classList.toggle('active', k === scopeSel);
+    document.querySelector(`[data-staff-row="${k}"]`)?.classList.toggle('scoped', k === scopeSel);
   }
   document.getElementById('scopeView').style.display = scopeSel >= 0 ? 'block' : 'none';
+  updateScopeCaption();
+  // the transform gizmo would sit right behind the scope — hide it while reading
   refreshTripodGizmoAttachment();
   if (scopeSel >= 0) {
     autoRotateCamera = false;
     if (!staffs[scopeSel]?.visible) setStaffVisible(scopeSel, true);
+  }
+}
+
+function updateScopeCaption() {
+  const cap = document.getElementById('scopeCaption');
+  if (!cap) return;
+  if (scopeSel < 0) { cap.textContent = ''; return; }
+  const st = sightState(scopeSel);
+  const p = STAFF_POINTS[scopeSel];
+  if (st && st.ok) {
+    const r = st.sightY - st.base;
+    cap.innerHTML = `${p.short} · ${p.label} — <b>${staffBand(r)} · ${r.toFixed(3)} m</b>`;
+  } else {
+    cap.textContent = `${p.short} · ${p.label}`;
   }
 }
 
@@ -697,7 +722,7 @@ function makeGridBubble(label) {
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
-  spr.scale.setScalar(1.1);
+  spr.scale.setScalar(0.85);
   return spr;
 }
 
@@ -723,8 +748,8 @@ function buildSetoutGrid(boundary) {
   });
   const slabMinX = Math.min(...SLAB_FOOTPRINT.map(q => q[0]));
   const slabMinZ = Math.min(...SLAB_FOOTPRINT.map(q => q[1]));
-  const mat = () => new THREE.LineDashedMaterial({ color: 0xbfc2c7, dashSize: 0.45, gapSize: 0.3,
-                                                   transparent: true, opacity: 0.85, depthTest: false });
+  const mat = () => new THREE.LineDashedMaterial({ color: 0x9aa0a8, dashSize: 0.25, gapSize: 0.35,
+                                                   transparent: true, opacity: 0.5, depthTest: false });
   const addLine = (p1, p2, label, bubbleEnd) => {
     const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([p1, p2]), mat());
     line.computeLineDistances();
@@ -824,6 +849,8 @@ function updateLevelIntersection() {
 function updateLevelReadout() {
   const el = document.getElementById('levelValue');
   if (el) el.textContent = levelPlane.position.y.toFixed(2) + ' m';
+  const rv = document.getElementById('levelRowVal');
+  if (rv) rv.textContent = levelActive ? 'RL ' + levelPlane.position.y.toFixed(2) : '';
   const inp = document.getElementById('levelInput');
   if (inp && document.activeElement !== inp) inp.value = levelPlane.position.y.toFixed(2);
   slabOutline.position.y = levelPlane.position.y + 0.01;
@@ -1033,16 +1060,10 @@ function setMeasureActive(on) {
   measureActive = on;
   if (measureActive) autoRotateCamera = false;
   const btn = document.getElementById('measureToggle');
-  if (btn) {
-    btn.classList.toggle('active', measureActive);
-    btn.setAttribute('aria-label', measureActive ? 'Stop measuring' : 'Start measuring');
-    btn.title = measureActive ? 'Stop measuring' : 'Measure distance';
-  }
-  const startBtn = document.getElementById('measureStart');
-  if (startBtn) {
-    startBtn.classList.toggle('active', measureActive);
-    startBtn.textContent = measureActive ? 'Stop' : 'Start';
-  }
+  btn.classList.toggle('active', measureActive);
+  btn.setAttribute('aria-label', measureActive ? 'Stop measuring' : 'Start measuring');
+  btn.title = measureActive ? 'Stop measuring' : 'Measure distance';
+  document.getElementById('measureBar').hidden = !measureActive;
   measureStatusText(measureActive ? (measurePoints.length ? 'Click second point' : 'Click first point') : 'Click two points on the model');
 }
 
@@ -1167,7 +1188,7 @@ const overlayRoots = {};   // file -> gltf scene
 const overlayOn = {};      // file -> user wants it on
 
 // ---- onboarding / help tour ----
-const TOUR_STORAGE_KEY = 'kingstonViewerOnboardingSeen';
+const TOUR_STORAGE_KEY = 'kingstonSurveyV3TourSeen';
 const tourEl = document.getElementById('onboarding');
 const tourSpotlight = document.getElementById('tourSpotlight');
 const tourCard = document.getElementById('tourCard');
@@ -1180,48 +1201,38 @@ const tourSkip = document.getElementById('tourSkip');
 const tourSteps = [
   {
     target: '#viewport',
-    title: '3D model workspace',
-    body: 'Drag to orbit the excavation model, scroll to zoom, and right-drag to pan around the site.'
+    title: 'Site workspace',
+    body: 'Drag to orbit, scroll to zoom, right-drag to pan. The dumpy level and the staffs are placed on the terrain for you.'
   },
   {
-    target: '#layers',
-    title: 'Layers',
-    body: 'Turn construction elements on or off to isolate soil, walls, slabs, piers, and other model groups.'
+    target: '#stepInstrument',
+    title: '1 · Position the level',
+    body: 'Press "Move level" and drag the instrument (or rotate it). The sight height is the instrument\'s horizontal line of collimation.'
   },
   {
-    target: '.overlay-row',
-    title: 'Overlays',
-    body: 'Add contextual models such as the excavator, neighbouring house, retaining wall, or fence when needed.'
+    target: '#stepStaffs',
+    title: '2 · Read the staffs',
+    body: 'Each row is a fixed set-out point. Yellow = readable; red tells you why not. Readings use E-staff notation: 14 · 1.462 m means E-band 14 (1.4 m) plus 62 mm.'
   },
   {
-    target: '#scrubber',
-    title: 'Stage timeline',
-    body: 'Move through excavation stages with the timeline. The model reloads to show the selected stage.'
+    target: '#staffSummary',
+    title: 'Readable count',
+    body: 'Not all staffs can be read from one setup. Move the level higher or lower until the bar fills — that is differential levelling.'
   },
   {
-    target: '#resetBtn',
-    title: 'View controls',
-    body: 'Use zoom, reset, measure, level, and VR shortcuts from the floating toolbar beside the orientation cube.'
+    target: '#levelToolToggle',
+    title: '3 · Reference plane',
+    body: 'Show the level plane to compare reduced levels. The title boundary and the A.02 setout grid can be switched on separately.'
   },
   {
-    target: '#measureStart',
-    title: 'Measure distance',
-    body: 'Start measuring, then click two model points to display a distance directly in the viewport.'
-  },
-  {
-    target: '#levelToggle',
-    title: 'Level plane',
-    body: 'Show a movable level plane to read heights and inspect where the model intersects a selected level.'
-  },
-  {
-    target: '#soilOpacity',
-    title: 'Soil X-ray',
-    body: 'Fade the soil layer to reveal retained structures and staged work hidden below the terrain.'
+    target: '#measureToggle',
+    title: 'Measure',
+    body: 'Click two points on the model to measure a distance.'
   },
   {
     target: '#helpTourToggle',
     title: 'Help',
-    body: 'Open this walkthrough again any time from the question-mark button.'
+    body: 'Open this walkthrough again any time.'
   }
 ];
 let tourIndex = 0;
@@ -1375,8 +1386,8 @@ setGizmoMode('translate');
 let tripodGizmoActive = false;
 function refreshTripodGizmoAttachment() {
   const root = overlayRoots[TRIPOD_FILE];
-  if (tripodGizmoActive && root && root.visible) {
-    tripodGizmo.attach(root); tripodGizmo.visible = scopeSel < 0;
+  if (tripodGizmoActive && root && root.visible && scopeSel < 0) {
+    tripodGizmo.attach(root); tripodGizmo.visible = true;
   } else {
     tripodGizmo.detach(); tripodGizmo.visible = false;
   }
@@ -1386,7 +1397,9 @@ document.getElementById('tripodGizmoToggle').addEventListener('click', () => {
   if (tripodGizmoActive) autoRotateCamera = false;
   const btn = document.getElementById('tripodGizmoToggle');
   btn.classList.toggle('active', tripodGizmoActive);
-  btn.textContent = tripodGizmoActive ? 'Disable Move/Rotate' : 'Enable Move/Rotate';
+  btn.textContent = tripodGizmoActive ? 'Done' : 'Move level';
+  document.getElementById('instrumentModes').hidden = !tripodGizmoActive;
+  document.getElementById('stepInstrument').classList.toggle('done', tripodGizmoActive);
   // make sure the tripod is loaded + visible, placed on the terrain the first time
   if (tripodGizmoActive) {
     const cb = document.querySelector('.overlay-row[data-file="' + TRIPOD_FILE + '"] input');
@@ -1400,16 +1413,6 @@ document.getElementById('tripodMove').addEventListener('click', () => setTripodG
 document.getElementById('tripodRotate').addEventListener('click', () => setTripodGizmoMode('rotate'));
 setTripodGizmoMode('translate');
 
-document.querySelectorAll('.mode-tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    const mode = tab.dataset.mode;
-    document.querySelectorAll('.mode-tab').forEach(btn => btn.classList.toggle('active', btn === tab));
-    document.querySelectorAll('.mode-panel').forEach(panel => {
-      panel.classList.toggle('active', panel.dataset.modePanel === mode);
-    });
-  });
-});
-
 // ---- fixed levelling staffs wiring ----
 function ensureStaffPlacement() {
   ensureStaffs();
@@ -1422,7 +1425,6 @@ function ensureStaffPlacement() {
 function syncStaffControls() {
   staffOn = staffs.some(staff => staff.visible);
   const allOn = staffs.length > 0 && staffs.every(staff => staff.visible);
-  document.getElementById('staffToggle').classList.toggle('active', allOn);
   staffs.forEach((staff, i) => {
     const checkbox = document.getElementById('staffVisible' + i);
     const row = document.querySelector(`[data-staff-row="${i}"]`);
@@ -1462,14 +1464,10 @@ function buildStaffControls() {
       <input class="staff-switch" id="staffVisible${i}" type="checkbox" aria-label="Show ${point.label}">
       <label class="staff-name" for="staffVisible${i}">
         <b>${point.short}</b>
-        <span>${point.label}</span>
+        <span class="lbl">${point.label}</span>
       </label>
-      <span class="staff-reading" data-staff-reading="${i}">Off</span>
-      <button class="staff-read" id="staffScope${i}" type="button" disabled aria-label="Read ${point.label}">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="12" cy="12" r="8" />
-          <path d="M12 5v14M5 12h14" />
-        </svg>
+      <button class="staff-read" id="staffScope${i}" type="button" disabled title="Look through the scope">
+        <span class="staff-reading" data-staff-reading="${i}">Off</span>
       </button>`;
     list.appendChild(row);
     row.querySelector('.staff-switch').addEventListener('change', event => setStaffVisible(i, event.target.checked));
@@ -1480,20 +1478,6 @@ function buildStaffControls() {
 buildStaffControls();
 document.getElementById('staffToggle').addEventListener('click', () => setStaffsVisible(true));
 document.getElementById('staffHideAll').addEventListener('click', () => setStaffsVisible(false));
-document.getElementById('staffHelp')?.addEventListener('click', () => {
-  alert('E-staff notation: 10 = 1.000 m, 09 = 0.900 m.');
-});
-
-let boundaryActive = false;
-let gridActive = false;
-
-function syncReferenceVisibility() {
-  slabOutline.visible = levelActive;
-  boundaryLine.visible = levelActive && boundaryActive;
-  gridGroup.visible = levelActive && gridActive;
-  document.getElementById('boundaryToggle')?.classList.toggle('active', boundaryActive);
-  document.getElementById('gridToggle')?.classList.toggle('active', gridActive);
-}
 
 function setLevelActive(on) {
   levelActive = on;
@@ -1501,44 +1485,39 @@ function setLevelActive(on) {
   else { levelCtrl.detach(); }
   levelPlane.visible = levelActive;
   levelCtrl.visible = levelActive;
-  syncReferenceVisibility();
+  slabOutline.visible = levelActive;
+  applyReferenceToggles();
   document.getElementById('levelReadout').style.display = levelActive ? 'block' : 'none';
   const btn = document.getElementById('levelToggle');
-  btn.classList.toggle('active', levelActive);
-  btn.textContent = 'Level plane';
+  btn.checked = levelActive;
+  document.querySelectorAll('#stepReference .row.sub').forEach(r => r.classList.toggle('disabled', !levelActive));
+  document.getElementById('stepReference')?.classList.toggle('done', levelActive);
   const iconBtn = document.getElementById('levelToolToggle');
-  if (iconBtn) {
-    iconBtn.classList.toggle('active', levelActive);
-    iconBtn.setAttribute('aria-label', levelActive ? 'Hide level plane' : 'Show level plane');
-    iconBtn.title = levelActive ? 'Hide level plane' : 'Show level plane';
-  }
+  iconBtn.classList.toggle('active', levelActive);
+  iconBtn.setAttribute('aria-label', levelActive ? 'Hide level plane' : 'Show level plane');
+  iconBtn.title = levelActive ? 'Hide level plane' : 'Show level plane';
   updateLevelReadout();
 }
 
 // ---- level plane toggle ----
-document.getElementById('levelToggle').addEventListener('click', () => setLevelActive(!levelActive));
-document.getElementById('levelToolToggle')?.addEventListener('click', () => setLevelActive(!levelActive));
-document.getElementById('boundaryToggle')?.addEventListener('click', () => {
-  boundaryActive = !boundaryActive;
-  if (boundaryActive && !levelActive) setLevelActive(true);
-  syncReferenceVisibility();
-});
-document.getElementById('gridToggle')?.addEventListener('click', () => {
-  gridActive = !gridActive;
-  if (gridActive && !levelActive) setLevelActive(true);
-  syncReferenceVisibility();
-});
+document.getElementById('levelToggle').addEventListener('change', (e) => setLevelActive(e.target.checked));
+// boundary + setout grid ride the level plane but toggle independently
+function applyReferenceToggles() {
+  boundaryLine.visible = levelActive && document.getElementById('boundaryToggle').checked;
+  gridGroup.visible = levelActive && document.getElementById('gridToggle').checked;
+}
+document.getElementById('boundaryToggle').addEventListener('change', applyReferenceToggles);
+document.getElementById('gridToggle').addEventListener('change', applyReferenceToggles);
+document.getElementById('levelToolToggle').addEventListener('click', () => setLevelActive(!levelActive));
 document.getElementById('levelInput').addEventListener('input', () => {
   const v = parseFloat(document.getElementById('levelInput').value);
   if (!Number.isNaN(v)) { levelPlane.position.y = v; updateLevelReadout(); }
 });
 
-function toggleMeasureMode() {
+document.getElementById('measureToggle').addEventListener('click', () => {
   if (measureActive) clearMeasurement(false);
   setMeasureActive(!measureActive);
-}
-document.getElementById('measureToggle')?.addEventListener('click', toggleMeasureMode);
-document.getElementById('measureStart')?.addEventListener('click', toggleMeasureMode);
+});
 document.getElementById('measureClear').addEventListener('click', () => clearMeasurement());
 
 document.querySelectorAll('.overlay-row').forEach(row => {

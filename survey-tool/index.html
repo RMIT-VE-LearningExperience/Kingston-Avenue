@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Kingston Excavation - Survey Tool</title>
+  <title>Kingston Excavation - Survey Tool V2</title>
   <link rel="stylesheet" href="style.css" />
   <script type="importmap">
   {
@@ -22,89 +22,95 @@
       <header class="panel-header">
         <div>
           <span class="eyebrow">Kingston excavation</span>
-          <h1>Survey Tool</h1>
+          <h1>Survey Tool V2</h1>
         </div>
         <span class="panel-status"><i></i>NGL</span>
       </header>
 
-      <button id="levelToggle" class="wide level-primary">Show Level Plane</button>
+      <nav class="mode-tabs" aria-label="Tool mode">
+        <button class="mode-tab active" type="button" data-mode="survey">Survey</button>
+        <button class="mode-tab" type="button" data-mode="display">Display</button>
+        <button class="mode-tab" type="button" data-mode="measure">Measure</button>
+      </nav>
 
-      <details class="menu-group" open>
-        <summary>
-          <span><b>Survey setup</b><small>Position the dumpy level</small></span>
-        </summary>
-        <div class="menu-content">
-          <button id="tripodGizmoToggle" class="wide primary-action">Move dumpy level</button>
-          <div class="btnrow compact-actions">
-            <button id="tripodMove">Move</button>
-            <button id="tripodRotate">Rotate</button>
+      <section class="mode-panel active" data-mode-panel="survey">
+        <div class="workflow-header">
+          <div>
+            <span class="section-label">Current task</span>
+            <h2>Read staff positions</h2>
           </div>
-          <div class="tool-status">Place the tripod where each active staff is within reading range.</div>
+          <button id="tripodGizmoToggle" class="primary-action">Move level</button>
         </div>
-      </details>
 
-      <details class="menu-group" id="staffMenu" open>
-        <summary>
-          <span><b>Staff positions</b><small>Building corners &amp; returns</small></span>
-        </summary>
-        <div class="menu-content">
-          <div class="staff-batch-actions">
-            <button id="staffToggle">Show all</button>
-            <button id="staffHideAll">Hide all</button>
-          </div>
-          <p class="staff-legend"><b>E-staff notation</b><span>10 = 1.000 m · 09 = 0.900 m</span></p>
-          <div id="staffList" class="staff-list"></div>
-          <div id="staffStatus" class="tool-status staff-summary">Select one or more fixed staff positions.</div>
+        <div class="movement-tools" aria-label="Movement mode">
+          <button id="tripodMove" type="button">Move</button>
+          <button id="tripodRotate" type="button">Rotate</button>
         </div>
-      </details>
 
-      <details class="menu-group">
-        <summary>
-          <span><b>Model display</b><small>Layers, context &amp; x-ray</small></span>
-        </summary>
-        <div class="menu-content">
-          <div class="subsection">
-            <label class="section-label">Layers</label>
-            <div id="layers"></div>
-          </div>
-          <div class="subsection">
-            <label class="section-label">Context</label>
-            <label class="layer overlay-row" data-file="models/excavator.glb">
-              <span class="swatch" style="background:#d9b53d"></span>
-              <span class="name">Excavator</span>
-              <span class="count">123</span>
-              <span class="eye"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-7-11-7a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></span>
-              <input type="checkbox" />
-            </label>
-            <label class="layer overlay-row" data-file="models/neighbour.glb">
-              <span class="swatch" style="background:#a8503c"></span>
-              <span class="name">Neighbour + Wall</span>
-              <span class="count">3</span>
-              <span class="eye"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-7-11-7a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></span>
-              <input type="checkbox" />
-            </label>
-            <label class="layer overlay-row" data-file="models/neighbour_left.glb">
-              <span class="swatch" style="background:#6b8f3a"></span>
-              <span class="name">Neighbour-Left + Fence</span>
-              <span class="count">3</span>
-              <span class="eye"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-7-11-7a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></span>
-              <input type="checkbox" />
-            </label>
-            <label class="layer overlay-row" data-file="models/tripod.glb">
-              <span class="swatch" style="background:#4ec9b0"></span>
-              <span class="name">Dumpy Level + Tripod</span>
-              <span class="count">1</span>
-              <span class="eye"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-7-11-7a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></span>
-              <input type="checkbox" />
-            </label>
-          </div>
-          <div class="subsection">
-            <label class="section-label" for="soilOpacity">Soil X-ray</label>
-            <input type="range" id="soilOpacity" min="0" max="100" value="100" />
-            <div class="rowval"><span>Transparent</span><span id="soilVal">100%</span></div>
+        <div id="staffStatus" class="staff-summary">Select one or more fixed staff positions.</div>
+
+        <div class="staff-toolbar">
+          <button id="staffToggle" type="button">Show all</button>
+          <button id="staffHideAll" type="button">Hide all</button>
+          <button id="staffHelp" type="button" title="E-staff notation: 10 = 1.000 m, 09 = 0.900 m">E-staff</button>
+        </div>
+
+        <div id="staffList" class="staff-list"></div>
+      </section>
+
+      <section class="mode-panel" data-mode-panel="display">
+        <div class="panel-section">
+          <span class="section-label">Reference overlays</span>
+          <div class="display-toggles">
+            <button id="levelToggle" type="button">Level plane</button>
+            <button id="boundaryToggle" type="button">Boundary</button>
+            <button id="gridToggle" type="button">Setout grid</button>
           </div>
         </div>
-      </details>
+
+        <div class="panel-section">
+          <label class="section-label">Layers</label>
+          <div id="layers"></div>
+        </div>
+
+        <div class="panel-section">
+          <label class="section-label">Context</label>
+          <label class="layer overlay-row" data-file="models/excavator.glb">
+            <span class="swatch" style="background:#d9b53d"></span>
+            <span class="name">Excavator</span>
+            <span class="count">123</span>
+            <span class="eye"></span>
+            <input type="checkbox" />
+          </label>
+          <label class="layer overlay-row" data-file="models/neighbour.glb">
+            <span class="swatch" style="background:#a8503c"></span>
+            <span class="name">Neighbour + Wall</span>
+            <span class="count">3</span>
+            <span class="eye"></span>
+            <input type="checkbox" />
+          </label>
+          <label class="layer overlay-row" data-file="models/neighbour_left.glb">
+            <span class="swatch" style="background:#6b8f3a"></span>
+            <span class="name">Neighbour-Left + Fence</span>
+            <span class="count">3</span>
+            <span class="eye"></span>
+            <input type="checkbox" />
+          </label>
+          <label class="layer overlay-row" data-file="models/tripod.glb">
+            <span class="swatch" style="background:#4ec9b0"></span>
+            <span class="name">Dumpy Level + Tripod</span>
+            <span class="count">1</span>
+            <span class="eye"></span>
+            <input type="checkbox" />
+          </label>
+        </div>
+
+        <div class="panel-section">
+          <label class="section-label" for="soilOpacity">Soil X-ray</label>
+          <input type="range" id="soilOpacity" min="0" max="100" value="100" />
+          <div class="rowval"><span>Transparent</span><span id="soilVal">100%</span></div>
+        </div>
+      </section>
 
       <section hidden>
         <label class="section-label">Excavator Placement</label>
@@ -115,19 +121,19 @@
         </div>
       </section>
 
-      <details class="menu-group">
-        <summary>
-          <span><b>Measurement</b><small>Distance tools</small></span>
-        </summary>
-        <div class="menu-content">
-          <div class="subsection">
-            <button id="measureClear" class="wide">Clear measurement</button>
-            <div id="measureStatus" class="tool-status">Click two points on the model</div>
+      <section class="mode-panel" data-mode-panel="measure">
+        <div class="workflow-header">
+          <div>
+            <span class="section-label">Distance tool</span>
+            <h2>Measure two points</h2>
           </div>
+          <button id="measureStart" class="primary-action" type="button">Start</button>
         </div>
-      </details>
+        <button id="measureClear" type="button">Clear measurement</button>
+        <div id="measureStatus" class="tool-status">Click two points on the model</div>
+      </section>
 
-      <p class="hint">Drag to orbit · scroll or +/− to zoom · right-drag to pan</p>
+      <p class="hint">Drag to orbit · scroll or +/- to zoom · right-drag to pan</p>
     </aside>
 
     <main id="viewport">
@@ -144,21 +150,6 @@
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M12 5a7 7 0 1 1-6.1 3.57" />
               <path d="M5.5 5.5v4h4" />
-            </svg>
-          </button>
-          <button id="measureToggle" class="round-tool" aria-label="Start measuring" title="Measure distance">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M5 16.5 16.5 5 20 8.5 8.5 20z" />
-              <path d="M9 15.5 7.5 14" />
-              <path d="M12 12.5 10.5 11" />
-              <path d="M15 9.5 13.5 8" />
-            </svg>
-          </button>
-          <button id="levelToolToggle" class="round-tool" aria-label="Show level plane" title="Show level plane">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4 8.5 12 4l8 4.5-8 4.5z" />
-              <path d="M4 15.5 12 20l8-4.5" />
-              <path d="M4 12 12 16.5 20 12" />
             </svg>
           </button>
           <button id="helpTourToggle" class="round-tool" aria-label="Open help" title="Help">

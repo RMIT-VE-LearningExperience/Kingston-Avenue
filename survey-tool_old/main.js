@@ -64,7 +64,7 @@ let viewGizmoStart = null;
 let viewGizmoLast = null;
 let viewGizmoMoved = false;
 
-function makeAxisLabel(text, color, fontSize = 28) {
+function makeAxisLabel(text, color) {
   const canvas = document.createElement('canvas');
   canvas.width = 64; canvas.height = 64;
   const ctx = canvas.getContext('2d');
@@ -73,7 +73,7 @@ function makeAxisLabel(text, color, fontSize = 28) {
   ctx.arc(32, 32, 24, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = '#1e1f22';
-  ctx.font = `700 ${fontSize}px -apple-system, Segoe UI, sans-serif`;
+  ctx.font = '700 28px -apple-system, Segoe UI, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(text, 32, 33);
@@ -97,7 +97,6 @@ function addViewGizmoAxis(name, direction, color, view) {
   sphere.position.copy(direction).multiplyScalar(1.22);
   sphere.userData.view = view;
   sphere.userData.tooltip = `${name} view`;
-  sphere.userData.hitRadius = 20;
   viewGizmoRoot.add(sphere);
   viewGizmoSpheres.push(sphere);
 
@@ -105,24 +104,21 @@ function addViewGizmoAxis(name, direction, color, view) {
   label.position.copy(sphere.position);
   label.userData.view = view;
   label.userData.tooltip = `${name} view`;
-  label.userData.hitRadius = 20;
   viewGizmoRoot.add(label);
   viewGizmoSpheres.push(label);
 }
 addViewGizmoAxis('X', new THREE.Vector3(1, 0, 0), 0xbc4050, 'side');
 addViewGizmoAxis('Y', new THREE.Vector3(0, 1, 0), 0x9bd13d, 'top');
 addViewGizmoAxis('Z', new THREE.Vector3(0, 0, 1), 0x4fa3f7, 'front');
-
-// Keep isometric access fixed beneath the rotating axes so it remains
-// discoverable regardless of the current camera orientation.
-const isoLabel = makeAxisLabel('ISO', '#4a8db0', 18);
-isoLabel.position.set(0, -1.25, 0);
-isoLabel.scale.set(0.74, 0.74, 1);
-isoLabel.userData.view = 'iso';
-isoLabel.userData.tooltip = 'Isometric view';
-isoLabel.userData.hitRadius = 24;
-viewGizmoScene.add(isoLabel);
-viewGizmoSpheres.push(isoLabel);
+const isoSphere = new THREE.Mesh(
+  new THREE.SphereGeometry(0.28, 24, 16),
+  new THREE.MeshBasicMaterial({ color: 0x4a8db0, transparent: true, opacity: 0.65, depthTest: false })
+);
+isoSphere.position.set(-0.8, -0.85, 0);
+isoSphere.userData.view = 'iso';
+isoSphere.userData.tooltip = 'Iso view';
+viewGizmoRoot.add(isoSphere);
+viewGizmoSpheres.push(isoSphere);
 
 function getViewGizmoBox() {
   const size = viewport.clientWidth <= 760 ? 116 : 132;
@@ -153,12 +149,12 @@ function pickViewGizmo(event) {
     const sx = (screenPos.x * 0.5 + 0.5) * box.size;
     const sy = (-screenPos.y * 0.5 + 0.5) * box.size;
     const d = Math.hypot(x - sx, y - sy);
-    if (d <= (obj.userData.hitRadius || 20) && d < nearestDistance) {
+    if (d < nearestDistance) {
       nearestDistance = d;
       nearest = obj;
     }
   });
-  return nearest;
+  return nearestDistance <= 55 ? nearest : null;
 }
 function updateViewGizmoTooltip(event) {
   if (!viewGizmoTooltip || viewGizmoDragging) return;
@@ -561,7 +557,6 @@ function selectScope(i) {
     document.getElementById('staffScope' + k)?.classList.toggle('active', k === scopeSel);
   }
   document.getElementById('scopeView').style.display = scopeSel >= 0 ? 'block' : 'none';
-  refreshTripodGizmoAttachment();
   if (scopeSel >= 0) {
     autoRotateCamera = false;
     if (!staffs[scopeSel]?.visible) setStaffVisible(scopeSel, true);
@@ -625,10 +620,10 @@ fillMesh.rotation.x = Math.PI / 2;
 slabOutline.add(fillMesh);
 
 // ---- title boundary outline (dash-dot, rides the level plane) ----
-// S02 dimensions the primary retention parcel at 29.57 m north, 16.76 m east,
-// and 33.53 m south. The terrain extends into the separate river-side parcel,
-// so its convex hull must not be presented as the title boundary.
-const TITLE_BOUNDARY_DIMS = { north: 29.57, east: 16.76, south: 33.53 };
+// The modeled terrain block is cut along the title boundary on its straight
+// sides (drawing A.02: east 16.76 m @135°, south 33.53 m @225°, north
+// 29.57 m + 111.46 m @45°), so the XZ convex hull of the soil mesh IS the
+// boundary line around the modeled part of the site.
 const boundaryLine = new THREE.LineLoop(
   new THREE.BufferGeometry(),
   new THREE.LineDashedMaterial({ color: 0xe8e8ea, dashSize: 0.7, gapSize: 0.35,
@@ -640,34 +635,35 @@ scene.add(boundaryLine);
 
 function buildBoundaryOutline() {
   if (!groups.soil || !groups.soil.length) return;
+  const pts = [];
   const v = new THREE.Vector3();
-  let maxX = -Infinity;
   groups.soil.forEach(m => {
     const pos = m.geometry.attributes.position;
     const step = Math.max(1, Math.floor(pos.count / 20000));
     for (let i = 0; i < pos.count; i += step) {
       v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld);
-      maxX = Math.max(maxX, v.x);
+      pts.push([v.x, v.z]);
     }
   });
-  if (!Number.isFinite(maxX)) return;
-
-  // Model X follows the 45-degree title lines and model Z follows 135 degrees.
-  // The south title line coincides with the modeled south slab/retention line;
-  // use that and the terrain east limit to anchor the surveyed dimensions.
-  const southZ = Math.min(...SLAB_FOOTPRINT.map(q => q[1]));
-  const northZ = southZ + TITLE_BOUNDARY_DIMS.east;
-  const boundary = [
-    [maxX - TITLE_BOUNDARY_DIMS.north, northZ],
-    [maxX, northZ],
-    [maxX, southZ],
-    [maxX - TITLE_BOUNDARY_DIMS.south, southZ]
-  ];
+  // convex hull, monotone chain
+  pts.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lower = [], upper = [];
+  for (const q of pts) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], q) <= 0) lower.pop();
+    lower.push(q);
+  }
+  for (let i = pts.length - 1; i >= 0; i--) {
+    const q = pts[i];
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], q) <= 0) upper.pop();
+    upper.push(q);
+  }
+  const hull = lower.slice(0, -1).concat(upper.slice(0, -1));
   boundaryLine.geometry.dispose();
   boundaryLine.geometry = new THREE.BufferGeometry().setFromPoints(
-    boundary.map(q => new THREE.Vector3(q[0], 0, q[1])));
+    hull.map(q => new THREE.Vector3(q[0], 0, q[1])));
   boundaryLine.computeLineDistances();
-  buildSetoutGrid(boundary);
+  buildSetoutGrid(hull);
 }
 
 // ---- structural setout grid (drawing A.02), rides the level plane ----
@@ -701,28 +697,21 @@ function makeGridBubble(label) {
   return spr;
 }
 
-function clipGridLine(axis, value, boundary) {
-  const hits = [];
-  for (let i = 0; i < boundary.length; i++) {
-    const a = boundary[i], b = boundary[(i + 1) % boundary.length];
-    const da = a[axis], db = b[axis];
-    if (Math.abs(db - da) < 1e-8 || value < Math.min(da, db) || value > Math.max(da, db)) continue;
-    const t = (value - da) / (db - da);
-    const other = a[1 - axis] + t * (b[1 - axis] - a[1 - axis]);
-    const point = axis === 0 ? [value, other] : [other, value];
-    if (!hits.some(h => Math.hypot(h[0] - point[0], h[1] - point[1]) < 1e-6)) hits.push(point);
-  }
-  return hits.sort((a, b) => a[1 - axis] - b[1 - axis]);
-}
-
-function buildSetoutGrid(boundary) {
+function buildSetoutGrid(hull) {
   gridGroup.children.slice().forEach(o => {
     if (o.isLine) o.geometry.dispose();
     if (o.material && o.material.map) o.material.map.dispose();
     gridGroup.remove(o);
   });
+  // A.02 shows the complete grid over the site, not just over the building.
+  // Use the terrain hull for line extents so the A/B axes remain visible.
   const slabMinX = Math.min(...SLAB_FOOTPRINT.map(q => q[0]));
   const slabMinZ = Math.min(...SLAB_FOOTPRINT.map(q => q[1]));
+  const terrainMinX = Math.min(...hull.map(q => q[0]));
+  const terrainMaxX = Math.max(...hull.map(q => q[0]));
+  const terrainMinZ = Math.min(...hull.map(q => q[1]));
+  const terrainMaxZ = Math.max(...hull.map(q => q[1]));
+  const M = 1.1;
   const mat = () => new THREE.LineDashedMaterial({ color: 0xbfc2c7, dashSize: 0.45, gapSize: 0.3,
                                                    transparent: true, opacity: 0.85, depthTest: false });
   const addLine = (p1, p2, label, bubbleEnd) => {
@@ -737,17 +726,21 @@ function buildSetoutGrid(boundary) {
   };
   GRID_NUM.forEach(gl => {
     const x = slabMinX + gl.d;
-    const hits = clipGridLine(0, x, boundary);
-    if (hits.length >= 2) addLine(
-      new THREE.Vector3(hits[0][0], 0, hits[0][1]),
-      new THREE.Vector3(hits[hits.length - 1][0], 0, hits[hits.length - 1][1]), gl.label, 1);
+    addLine(
+      new THREE.Vector3(x, 0, terrainMinZ - M),
+      new THREE.Vector3(x, 0, terrainMaxZ + M),
+      gl.label,
+      1
+    );
   });
   GRID_LET.forEach(gl => {
     const z = slabMinZ + gl.d;
-    const hits = clipGridLine(1, z, boundary);
-    if (hits.length >= 2) addLine(
-      new THREE.Vector3(hits[0][0], 0, hits[0][1]),
-      new THREE.Vector3(hits[hits.length - 1][0], 0, hits[hits.length - 1][1]), gl.label, 0);
+    addLine(
+      new THREE.Vector3(terrainMinX - M, 0, z),
+      new THREE.Vector3(terrainMaxX + M, 0, z),
+      gl.label,
+      0
+    );
   });
 }
 
@@ -1033,16 +1026,9 @@ function setMeasureActive(on) {
   measureActive = on;
   if (measureActive) autoRotateCamera = false;
   const btn = document.getElementById('measureToggle');
-  if (btn) {
-    btn.classList.toggle('active', measureActive);
-    btn.setAttribute('aria-label', measureActive ? 'Stop measuring' : 'Start measuring');
-    btn.title = measureActive ? 'Stop measuring' : 'Measure distance';
-  }
-  const startBtn = document.getElementById('measureStart');
-  if (startBtn) {
-    startBtn.classList.toggle('active', measureActive);
-    startBtn.textContent = measureActive ? 'Stop' : 'Start';
-  }
+  btn.classList.toggle('active', measureActive);
+  btn.setAttribute('aria-label', measureActive ? 'Stop measuring' : 'Start measuring');
+  btn.title = measureActive ? 'Stop measuring' : 'Measure distance';
   measureStatusText(measureActive ? (measurePoints.length ? 'Click second point' : 'Click first point') : 'Click two points on the model');
 }
 
@@ -1204,12 +1190,12 @@ const tourSteps = [
     body: 'Use zoom, reset, measure, level, and VR shortcuts from the floating toolbar beside the orientation cube.'
   },
   {
-    target: '#measureStart',
+    target: '#measureToggle',
     title: 'Measure distance',
     body: 'Start measuring, then click two model points to display a distance directly in the viewport.'
   },
   {
-    target: '#levelToggle',
+    target: '#levelToolToggle',
     title: 'Level plane',
     body: 'Show a movable level plane to read heights and inspect where the model intersects a selected level.'
   },
@@ -1376,7 +1362,7 @@ let tripodGizmoActive = false;
 function refreshTripodGizmoAttachment() {
   const root = overlayRoots[TRIPOD_FILE];
   if (tripodGizmoActive && root && root.visible) {
-    tripodGizmo.attach(root); tripodGizmo.visible = scopeSel < 0;
+    tripodGizmo.attach(root); tripodGizmo.visible = true;
   } else {
     tripodGizmo.detach(); tripodGizmo.visible = false;
   }
@@ -1399,16 +1385,6 @@ document.getElementById('tripodGizmoToggle').addEventListener('click', () => {
 document.getElementById('tripodMove').addEventListener('click', () => setTripodGizmoMode('translate'));
 document.getElementById('tripodRotate').addEventListener('click', () => setTripodGizmoMode('rotate'));
 setTripodGizmoMode('translate');
-
-document.querySelectorAll('.mode-tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    const mode = tab.dataset.mode;
-    document.querySelectorAll('.mode-tab').forEach(btn => btn.classList.toggle('active', btn === tab));
-    document.querySelectorAll('.mode-panel').forEach(panel => {
-      panel.classList.toggle('active', panel.dataset.modePanel === mode);
-    });
-  });
-});
 
 // ---- fixed levelling staffs wiring ----
 function ensureStaffPlacement() {
@@ -1461,16 +1437,10 @@ function buildStaffControls() {
     row.innerHTML = `
       <input class="staff-switch" id="staffVisible${i}" type="checkbox" aria-label="Show ${point.label}">
       <label class="staff-name" for="staffVisible${i}">
-        <b>${point.short}</b>
-        <span>${point.label}</span>
+        <b>${point.short} · ${point.label}</b>
+        <span class="staff-reading" data-staff-reading="${i}">Off</span>
       </label>
-      <span class="staff-reading" data-staff-reading="${i}">Off</span>
-      <button class="staff-read" id="staffScope${i}" type="button" disabled aria-label="Read ${point.label}">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="12" cy="12" r="8" />
-          <path d="M12 5v14M5 12h14" />
-        </svg>
-      </button>`;
+      <button class="staff-read" id="staffScope${i}" type="button" disabled>Read</button>`;
     list.appendChild(row);
     row.querySelector('.staff-switch').addEventListener('change', event => setStaffVisible(i, event.target.checked));
     row.querySelector('.staff-read').addEventListener('click', () => selectScope(i));
@@ -1480,20 +1450,6 @@ function buildStaffControls() {
 buildStaffControls();
 document.getElementById('staffToggle').addEventListener('click', () => setStaffsVisible(true));
 document.getElementById('staffHideAll').addEventListener('click', () => setStaffsVisible(false));
-document.getElementById('staffHelp')?.addEventListener('click', () => {
-  alert('E-staff notation: 10 = 1.000 m, 09 = 0.900 m.');
-});
-
-let boundaryActive = false;
-let gridActive = false;
-
-function syncReferenceVisibility() {
-  slabOutline.visible = levelActive;
-  boundaryLine.visible = levelActive && boundaryActive;
-  gridGroup.visible = levelActive && gridActive;
-  document.getElementById('boundaryToggle')?.classList.toggle('active', boundaryActive);
-  document.getElementById('gridToggle')?.classList.toggle('active', gridActive);
-}
 
 function setLevelActive(on) {
   levelActive = on;
@@ -1501,51 +1457,37 @@ function setLevelActive(on) {
   else { levelCtrl.detach(); }
   levelPlane.visible = levelActive;
   levelCtrl.visible = levelActive;
-  syncReferenceVisibility();
+  slabOutline.visible = levelActive;
+  boundaryLine.visible = levelActive;
+  gridGroup.visible = levelActive;
   document.getElementById('levelReadout').style.display = levelActive ? 'block' : 'none';
   const btn = document.getElementById('levelToggle');
   btn.classList.toggle('active', levelActive);
-  btn.textContent = 'Level plane';
+  btn.textContent = levelActive ? 'Hide Level Plane' : 'Show Level Plane';
   const iconBtn = document.getElementById('levelToolToggle');
-  if (iconBtn) {
-    iconBtn.classList.toggle('active', levelActive);
-    iconBtn.setAttribute('aria-label', levelActive ? 'Hide level plane' : 'Show level plane');
-    iconBtn.title = levelActive ? 'Hide level plane' : 'Show level plane';
-  }
+  iconBtn.classList.toggle('active', levelActive);
+  iconBtn.setAttribute('aria-label', levelActive ? 'Hide level plane' : 'Show level plane');
+  iconBtn.title = levelActive ? 'Hide level plane' : 'Show level plane';
   updateLevelReadout();
 }
 
 // ---- level plane toggle ----
 document.getElementById('levelToggle').addEventListener('click', () => setLevelActive(!levelActive));
-document.getElementById('levelToolToggle')?.addEventListener('click', () => setLevelActive(!levelActive));
-document.getElementById('boundaryToggle')?.addEventListener('click', () => {
-  boundaryActive = !boundaryActive;
-  if (boundaryActive && !levelActive) setLevelActive(true);
-  syncReferenceVisibility();
-});
-document.getElementById('gridToggle')?.addEventListener('click', () => {
-  gridActive = !gridActive;
-  if (gridActive && !levelActive) setLevelActive(true);
-  syncReferenceVisibility();
-});
+document.getElementById('levelToolToggle').addEventListener('click', () => setLevelActive(!levelActive));
 document.getElementById('levelInput').addEventListener('input', () => {
   const v = parseFloat(document.getElementById('levelInput').value);
   if (!Number.isNaN(v)) { levelPlane.position.y = v; updateLevelReadout(); }
 });
 
-function toggleMeasureMode() {
+document.getElementById('measureToggle').addEventListener('click', () => {
   if (measureActive) clearMeasurement(false);
   setMeasureActive(!measureActive);
-}
-document.getElementById('measureToggle')?.addEventListener('click', toggleMeasureMode);
-document.getElementById('measureStart')?.addEventListener('click', toggleMeasureMode);
+});
 document.getElementById('measureClear').addEventListener('click', () => clearMeasurement());
 
 document.querySelectorAll('.overlay-row').forEach(row => {
   const cb = row.querySelector('input');
   const file = row.dataset.file;
-  row.querySelector('.eye').innerHTML = eyeIcon(cb.checked);
-  row.classList.toggle('off', !cb.checked);
   cb.addEventListener('change', () => {
     const on = cb.checked;
     overlayOn[file] = on;
@@ -1956,9 +1898,7 @@ function frameView(kind, keepAutoRotate = false) {
     side:  [c.x + d,       c.y + d * 0.2, c.z],
   }[kind] || [c.x + d, c.y + d, c.z + d];
   camera.position.set(...pos);
-  if (kind === 'iso') {
-    // one canonical isometric view: the same rotation + framing as the
-    // opening view, so Reset / ISO always return to where the user started
+  if (keepAutoRotate && kind === 'iso') {
     camera.position.sub(c).applyAxisAngle(new THREE.Vector3(0, 1, 0), -Math.PI).add(c);
     const offset = camera.position.clone().sub(c).multiplyScalar(ZOOM_IN_SCALE ** INITIAL_ZOOM_LEVELS);
     camera.position.copy(c).add(offset);

@@ -1,0 +1,22 @@
+[
+  {
+    "id": "ngl",
+    "label": "NGL (Ground Level)",
+    "file": "models/ngl.glb",
+    "meshes": 15,
+    "mb": 0.31,
+    "excavator": {
+      "pos": [
+        -7.632,
+        0.299,
+        -14.444
+      ],
+      "quat": [
+        0.0,
+        0.009,
+        0.0,
+        1.0
+      ]
+    }
+  }
+]

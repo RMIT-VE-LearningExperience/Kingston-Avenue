@@ -52,14 +52,16 @@ GitHub Pages — push to `main`, the site deploys automatically from the repo ro
 
 ## survey-tool/
 
+As of 2026-08-27 `survey-tool/` holds the V2 mode-based redesign (Survey / Display / Measure tabs — see `survey-tool/CLAUDE.md`); the original UI lives unchanged in `survey-tool_old/`, and `survey-tool_v3/` is an alternative numbered-workflow redesign. All three share the logic below.
+
 `survey-tool/` is a standalone copy of the viewer (own `index.html`/`main.js`/`style.css`/`models/`, served at `/survey-tool/`) being repurposed for surveying training. Changes there never touch the main viewer. On top of the base viewer it has:
 
 - **Dumpy level + tripod** (`models/tripod.glb`, converted from a SketchUp upload; raw model was millimetres and off-origin — normalised to 1.70 m total height, instrument vertical axis at local (0,0), spike tips at Y=0). Placed via the "Dumpy Level Placement" move/rotate gizmo; Y continuously snaps to the terrain.
 - **Levelling staffs**: two procedural 5 m E-pattern staffs (`ensureStaffs()`/`makeStaffTexture()` — canvas texture drawn like a real metric E-staff: per decimetre an E-figure with spine + block pair, running two-digit numbers, black/red alternating metres; staff 1 orange cap, staff 2 blue cap). Default placement probes rings around the instrument for the highest/lowest spots that still give a valid reading (staff 1 high, staff 2 low). Each is moved via `Move Staff 1/2` (shared gizmo, `selectStaffMove`), terrain-snapped, always facing the instrument.
 - **Line-of-sight readout**: the instrument sights horizontally at `tripod.position.y + instrumentTop` (measured from the GLB at load). Per staff: readable iff `staffBase <= sightY <= staffBase + 5`. Staffs and level move fully independently — nothing is clamped to keep them in range; students practice differential levelling by discovering a staff is out of range and relocating the level themselves. Each dashed sight line is yellow with a crossing marker + live reading while readable, red with an out-of-range hint ("move the level lower/higher") otherwise. All instruments are kept on the terrain though: `keepOnTerrain` reverts a drag that leaves no ground underneath.
 - **Scope view** (`renderScopeInset()`): "Scope Staff 1/2" renders a 420 px circular telescope inset (scissor/viewport pass, same technique as the view-gizmo cube) from the instrument's optical axis aimed horizontally at the staff, auto-zoomed to frame ~0.28 m of staff (~1.5 px/mm, millimetre estimation), with a CSS crosshair + stadia reticle. The crosshair sits exactly at sight height so the E-pattern reading can be taken visually; sight lines/markers are hidden during this pass so they don't cover the graduations.
-- **Title boundary outline** (`buildBoundaryOutline()`): white dashed loop that rides the Level Plane (with the slab outline). Derived at each stage load as the XZ convex hull of the soil mesh — the modeled block is cut along the title boundary on its straight sides (drawing A.02: east 16.76 m @135°, south 33.53 m @225°, north 29.57 m + 111.46 m @45°), so the hull is the boundary around the modeled part of the site.
-- **Setout grid** (`buildSetoutGrid()`): drawing A.02's structural grid as dashed lines with circled bubble sprites at both ends, riding the Level Plane. Anchored to the BUILDING (`SLAB_FOOTPRINT`): grid 1 on the slab's west wall line, then 2/3 at +12.99/+21.38 m (chain 12990/8390); grid E on the slab's south wall line, then D/C/B/A at +6.59/+11.68/+19.14/+20.85 m (chains 6590/5090/7460/1710). Grid 3 lands on the SPW4 wall line as a cross-check. Lines span only the slab footprint (+1.5 m bubble margin) — the grid belongs to the building, not the terrain — and lines outside the building envelope (A/B, which serve the parcel's west part) are not drawn.
+- **Title boundary outline** (`buildBoundaryOutline()`): white dashed loop that rides the Level Plane (with the slab outline). It represents the primary S02 retention parcel using the surveyed 29.57 m north, 16.76 m east, and 33.53 m south dimensions. It is anchored to the model's east terrain limit and south slab/retention line; do not regress to the soil convex hull, which includes the separate river-side parcel.
+- **Setout grid** (`buildSetoutGrid()`): structural grid as dashed lines with circled bubble sprites, riding the Level Plane. Anchored to the BUILDING (`SLAB_FOOTPRINT`): grid 1 on the slab's west wall line, then 2/3 at +12.99/+21.38 m; grid E on the slab's south wall line, then D/C/B/A at +6.59/+11.68/+19.14/+20.85 m. Each axis is clipped to the surveyed title polygon, so axes outside the primary parcel are omitted.
 
 ## SPW4 staging (installed before the stage-03 excavation)
 
@@ -74,3 +76,22 @@ Blender/source work still needed in `Kingston_v7.blend` to complete this (web si
 1. **CB2 capping beam is missing from every export** — all existing `capping_beam` meshes are CB1-named. Model/tag CB2 (`extras.cat = "capping_beam"`) and include it in the stage 03 export (`spw1.glb`) and all later cumulative stages.
 2. **Stage 04 export (`cb1_spw2_3.glb`) contains no SPW4 at all** — include the SPW4 piles (+ CB2 beam) and add the protective soil mound covering the cap/beam to the stage-04 terrain.
 3. Re-export the affected GLBs and bump `ASSET_V` in `main.js` so browsers refetch them.
+
+## survey-tool_v3/
+
+`survey-tool_v3/` is an alternative de-cluttered redesign (same `main.js` logic, own copy of
+`models/`, served at `/survey-tool_v3/`). It implements the review in `survey-tool_old/CLAUDE.md`:
+
+- Sidebar is a numbered workflow — **1 Level** (single "Move level" primary; Move/Rotate segmented
+  control only appears while active; live sight-height RL), **2 Staffs** (sticky "N of 8 readable"
+  bar + 30 px rows: checkbox · code · label · reading; the reading itself is the scope button),
+  **3 Reference** (collapsed: level plane, title boundary, setout grid as independent toggles), and
+  a collapsed **Model** group (soil x-ray, layers, context overlays). Measurement lives only in the
+  viewport icon + a floating status pill (`#measureBar`).
+- Colour rule: orange = active state only; yellow/red = readable/out-of-range; the one primary
+  action per step is a filled neutral button. No bordered group boxes; base type 13 px.
+- Viewport: tripod transform gizmo is hidden while the scope inset is open
+  (`refreshTripodGizmoAttachment` checks `scopeSel`); the setout grid is drawn lighter/thinner than
+  the boundary with smaller bubbles; the scope shows a caption with the live reading.
+- Tour is rewritten around the survey workflow (`kingstonSurveyV3TourSeen` in localStorage) and
+  carries the E-staff notation explanation.
