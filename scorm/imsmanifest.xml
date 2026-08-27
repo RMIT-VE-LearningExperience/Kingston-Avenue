@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<manifest identifier="au.edu.rmit.kingston.surveytool" version="1.0"
+  xmlns="http://www.imsproject.org/xsd/imscp_rootv1p1p2"
+  xmlns:adlcp="http://www.adlnet.org/xsd/adlcp_rootv1p2"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.imsproject.org/xsd/imscp_rootv1p1p2 imscp_rootv1p1p2.xsd
+                      http://www.imsglobal.org/xsd/imsmd_rootv1p2p1 imsmd_rootv1p2p1.xsd
+                      http://www.adlnet.org/xsd/adlcp_rootv1p2 adlcp_rootv1p2.xsd">
+  <metadata>
+    <schema>ADL SCORM</schema>
+    <schemaversion>1.2</schemaversion>
+  </metadata>
+  <organizations default="org_kingston">
+    <organization identifier="org_kingston">
+      <title>Kingston Avenue Excavation — Survey Tool</title>
+      <item identifier="item_survey" identifierref="res_survey" isvisible="true">
+        <title>Differential levelling: dumpy level and E-staff readings</title>
+        <adlcp:masteryscore>100</adlcp:masteryscore>
+      </item>
+    </organization>
+  </organizations>
+  <resources>
+    <resource identifier="res_survey" type="webcontent" adlcp:scormtype="sco" href="index.html">
+      <file href="index.html"/>
+      <file href="main.js"/>
+      <file href="style.css"/>
+      <file href="scorm-api.js"/>
+      <file href="models/stages.json"/>
+      <file href="models/ngl.glb"/>
+      <file href="models/tripod.glb"/>
+      <file href="models/excavator.glb"/>
+      <file href="models/neighbour.glb"/>
+      <file href="models/neighbour_left.glb"/>
+    </resource>
+  </resources>
+</manifest>

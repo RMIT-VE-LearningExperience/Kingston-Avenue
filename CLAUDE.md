@@ -95,3 +95,13 @@ Blender/source work still needed in `Kingston_v7.blend` to complete this (web si
   the boundary with smaller bubbles; the scope shows a caption with the live reading.
 - Tour is rewritten around the survey workflow (`kingstonSurveyV3TourSeen` in localStorage) and
   carries the E-staff notation explanation.
+
+## SCORM package (Canvas)
+
+`scorm/build.sh [folder]` zips a tool folder (default `survey-tool/`) into a SCORM 1.2 package at
+`dist/kingston-<folder>-scorm12.zip` (dist/ is gitignored — rebuild, don't commit). It copies the
+files verbatim, adds `scorm/imsmanifest.xml` (must list every packaged file — the script checks)
+and injects `scorm/scorm-api.js` before `main.js`. The wrapper finds `window.API` in parent
+frames, sets `incomplete` on init, and `completed` + score 100 on the first scope reading (click on
+an enabled `.staff-read`) or after 3 min; it commits session time every 30 s and on unload. Outside
+an LMS it is a no-op. Three.js still loads from unpkg.com, so the player needs internet access.
