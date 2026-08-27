@@ -113,16 +113,6 @@ addViewGizmoAxis('X', new THREE.Vector3(1, 0, 0), 0xbc4050, 'side');
 addViewGizmoAxis('Y', new THREE.Vector3(0, 1, 0), 0x9bd13d, 'top');
 addViewGizmoAxis('Z', new THREE.Vector3(0, 0, 1), 0x4fa3f7, 'front');
 
-// Keep isometric access fixed beneath the rotating axes so it remains
-// discoverable regardless of the current camera orientation.
-const isoLabel = makeAxisLabel('ISO', '#4a8db0', 18);
-isoLabel.position.set(0, -1.25, 0);
-isoLabel.scale.set(0.74, 0.74, 1);
-isoLabel.userData.view = 'iso';
-isoLabel.userData.tooltip = 'Isometric view';
-isoLabel.userData.hitRadius = 24;
-viewGizmoScene.add(isoLabel);
-viewGizmoSpheres.push(isoLabel);
 
 function getViewGizmoBox() {
   const size = viewport.clientWidth <= 760 ? 116 : 132;

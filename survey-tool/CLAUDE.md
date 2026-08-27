@@ -53,8 +53,10 @@ Observed on a 1440×900 desktop viewport, default load and with level plane + gi
 7. Setout grid, title boundary and slab outline share the same dashed-white weight/colour — three
    meanings, one visual style.
 8. The Iso dot on the orientation gizmo rotated with the axes, was unlabelled, and Reset framed a
-   different (un-rotated, zoomed-out) view than the opening one. Fixed: a fixed labelled ISO pill
-   below the axes, and `frameView('iso')` always reproduces the opening view.
+   different (un-rotated, zoomed-out) view than the opening one. Resolved by removing the gizmo's
+   Iso control altogether (the view was never truly isometric: perspective camera, and 45° to the
+   world axes rather than to the site's rotated edges). The round Reset button returns to the
+   opening view via `frameView('iso')`.
 
 ## Direction for de-cluttering
 
