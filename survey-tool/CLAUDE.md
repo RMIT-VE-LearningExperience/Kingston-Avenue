@@ -115,3 +115,13 @@ the CSS crosshair at 50 % is always on the optical axis whatever size the styles
 query gives the inset. Check after changing the scope CSS: open a readable staff, and the
 crosshair must sit at (reading − decimetre) above that section's rule line (e.g. 1.462 m = 62 mm
 above the bottom of the "14" E).
+
+## Help tour
+
+`tourSteps` in `main.js` follows the survey workflow (site → position the level → readable count →
+readings/E-staff notation/telescope → reference overlays → Display tab → Measure tab → sheet
+(narrow only) → full screen → help). A step with `mode: 'survey'|'display'|'measure'` is shown
+even while its tab is inactive: `renderTour()` calls `setMode()` first, and `closeTour()` returns to
+Survey. Steps whose target is not rendered (e.g. `#panelHandle` on wide screens) are skipped by
+`visibleTourSteps()`. The E-staff button opens the tour at the readings step. Storage key
+`kingstonSurveyTourSeen` — bump it when the tour content changes materially so everyone sees it once.

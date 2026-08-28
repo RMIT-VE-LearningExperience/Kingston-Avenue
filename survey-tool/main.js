@@ -1169,7 +1169,7 @@ const overlayRoots = {};   // file -> gltf scene
 const overlayOn = {};      // file -> user wants it on
 
 // ---- onboarding / help tour ----
-const TOUR_STORAGE_KEY = 'kingstonViewerOnboardingSeen';
+const TOUR_STORAGE_KEY = 'kingstonSurveyTourSeen';
 const tourEl = document.getElementById('onboarding');
 const tourSpotlight = document.getElementById('tourSpotlight');
 const tourCard = document.getElementById('tourCard');
@@ -1182,48 +1182,53 @@ const tourSkip = document.getElementById('tourSkip');
 const tourSteps = [
   {
     target: '#viewport',
-    title: '3D model workspace',
-    body: 'Drag to orbit the excavation model, scroll to zoom, and right-drag to pan around the site.'
+    title: 'The site',
+    body: 'Drag to orbit, scroll to zoom, right-drag to pan. The dumpy level (on its tripod) and eight levelling staffs are already placed on the terrain at the building corners and returns.'
   },
   {
-    target: '#layers',
-    title: 'Layers',
-    body: 'Turn construction elements on or off to isolate soil, walls, slabs, piers, and other model groups.'
+    target: '#tripodGizmoToggle', mode: 'survey',
+    title: '1 · Position the level',
+    body: 'Press "Move level" to get a gizmo on the instrument, then choose Move (drag the arrows) or Rotate (drag the ring). The line of sight is horizontal at the telescope height. Press Done when it is placed.'
   },
   {
-    target: '.overlay-row',
-    title: 'Overlays',
-    body: 'Add contextual models such as the excavator, neighbouring house, retaining wall, or fence when needed.'
+    target: '#staffStatus', mode: 'survey',
+    title: '2 · How many staffs can you read?',
+    body: 'A staff is readable when the sight line hits it between 0 and 5 m and it is 1.5–22 m away. Not all eight can be read from one setup — that is the point: move the level and read again (differential levelling).'
   },
   {
-    target: '#scrubber',
-    title: 'Stage timeline',
-    body: 'Move through excavation stages with the timeline. The model reloads to show the selected stage.'
+    target: '#staffList', mode: 'survey',
+    title: '3 · Take the readings',
+    body: 'Yellow = readable, red tells you why not. Readings use E-staff notation: 14 · 1.462 m means band 14 (1.4 m) plus 62 mm. Press ⊕ to look through the telescope and read the E-pattern yourself; the crosshair is the sight line. Drag the telescope anywhere; close it with × or ⊕ again.'
   },
   {
-    target: '#resetBtn',
-    title: 'View controls',
-    body: 'Use zoom, reset, measure, level, and VR shortcuts from the floating toolbar beside the orientation cube.'
+    target: '#levelToolToggle',
+    title: 'Reference plane, boundary, setout grid',
+    body: 'These three viewport buttons show a horizontal level plane you can set to any RL, and on it the title boundary and the A.02 structural setout grid. Turning the plane off turns the other two off.'
   },
   {
-    target: '#measureStart',
-    title: 'Measure distance',
-    body: 'Start measuring, then click two model points to display a distance directly in the viewport.'
+    target: '.mode-tab[data-mode="display"]', mode: 'display',
+    title: 'Display tab',
+    body: 'The same reference toggles, plus the model layers, context models (excavator, neighbours, the tripod itself) and a soil X-ray slider to see through the terrain.'
   },
   {
-    target: '#levelToggle',
-    title: 'Level plane',
-    body: 'Show a movable level plane to read heights and inspect where the model intersects a selected level.'
+    target: '.mode-tab[data-mode="measure"]', mode: 'measure',
+    title: 'Measure tab',
+    body: 'Press Start, then click two points on the model to measure the distance between them. Drag a pin to adjust it.'
   },
   {
-    target: '#soilOpacity',
-    title: 'Soil X-ray',
-    body: 'Fade the soil layer to reveal retained structures and staged work hidden below the terrain.'
+    target: '#panelHandle',
+    title: 'Survey tools sheet',
+    body: 'On a narrow screen the tools sit in this sheet. Tap the bar to collapse it and give the model the whole frame — the readable count stays visible — and tap again to expand.'
+  },
+  {
+    target: '#fullscreenToggle',
+    title: 'Full screen',
+    body: 'Inside Canvas the frame is small: use this to take the tool full screen. Esc returns.'
   },
   {
     target: '#helpTourToggle',
     title: 'Help',
-    body: 'Open this walkthrough again any time from the question-mark button.'
+    body: 'Open this walkthrough again any time from the ? button. The E-staff button in the Survey tab jumps straight to the readings explanation.'
   }
 ];
 let tourIndex = 0;
@@ -1237,10 +1242,15 @@ function markTourSeen() {
   try { localStorage.setItem(TOUR_STORAGE_KEY, '1'); }
   catch {}
 }
+function setMode(mode) {
+  document.querySelectorAll('.mode-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.mode === mode));
+  document.querySelectorAll('.mode-panel').forEach(panel => panel.classList.toggle('active', panel.dataset.modePanel === mode));
+}
 function visibleTourSteps() {
   return tourSteps.filter(step => {
     const el = document.querySelector(step.target);
     if (!el) return false;
+    if (step.mode) return true;                 // the tour switches to that tab itself
     const rect = el.getBoundingClientRect();
     return rect.width > 0 && rect.height > 0;
   });
@@ -1291,11 +1301,13 @@ function renderTour() {
   tourBody.textContent = step.body;
   tourBack.disabled = tourIndex === 0;
   tourNext.textContent = tourIndex === steps.length - 1 ? 'Done' : 'Next';
+  if (step.mode) setMode(step.mode);
   requestAnimationFrame(() => positionTour(step));
 }
 function closeTour(saveSeen = true) {
   tourOpen = false;
   tourEl.hidden = true;
+  setMode('survey');   // the tour may have switched tabs
   if (saveSeen) markTourSeen();
 }
 function openTour(startIndex = 0) {
@@ -1405,13 +1417,7 @@ document.getElementById('tripodRotate').addEventListener('click', () => setTripo
 setTripodGizmoMode('translate');
 
 document.querySelectorAll('.mode-tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    const mode = tab.dataset.mode;
-    document.querySelectorAll('.mode-tab').forEach(btn => btn.classList.toggle('active', btn === tab));
-    document.querySelectorAll('.mode-panel').forEach(panel => {
-      panel.classList.toggle('active', panel.dataset.modePanel === mode);
-    });
-  });
+  tab.addEventListener('click', () => setMode(tab.dataset.mode));
 });
 
 // ---- fixed levelling staffs wiring ----
@@ -1485,7 +1491,8 @@ buildStaffControls();
 document.getElementById('staffToggle').addEventListener('click', () => setStaffsVisible(true));
 document.getElementById('staffHideAll').addEventListener('click', () => setStaffsVisible(false));
 document.getElementById('staffHelp')?.addEventListener('click', () => {
-  alert('E-staff notation: 10 = 1.000 m, 09 = 0.900 m.');
+  const idx = visibleTourSteps().findIndex(step => step.target === '#staffList');
+  openTour(Math.max(0, idx));
 });
 
 let boundaryActive = false;
