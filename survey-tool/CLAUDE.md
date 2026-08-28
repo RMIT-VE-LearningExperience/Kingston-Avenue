@@ -96,3 +96,11 @@ neither can be changed from inside the package. `#fullscreenToggle` in the viewp
 (wired in the same inline script as the drawer) calls `requestFullscreen()` on the document; it is
 hidden unless `document.fullscreenEnabled` is true (Canvas's LTI iframes allow it). For a full-width
 non-tracked embed, iframe the GitHub Pages URL in a Canvas Page instead.
+
+## Scope inset alignment
+
+`renderScopeInset()` renders to the live bounding box of `#scopeView` (not fixed constants), so
+the CSS crosshair at 50 % is always on the optical axis whatever size the stylesheet or a media
+query gives the inset. Check after changing the scope CSS: open a readable staff, and the
+crosshair must sit at (reading − decimetre) above that section's rule line (e.g. 1.462 m = 62 mm
+above the bottom of the "14" E).

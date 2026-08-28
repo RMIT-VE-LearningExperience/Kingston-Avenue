@@ -548,7 +548,10 @@ function placeStaffsFixed() {
 // range = the scope shows dirt or sky.
 const scopeCamera = new THREE.PerspectiveCamera(3, 1, 0.05, 500);
 let scopeSel = -1;
-const SCOPE_SIZE = 420, SCOPE_RIGHT = 64, SCOPE_TOP = 120;
+// the inset is rendered exactly where the CSS #scopeView box sits, so the
+// CSS crosshair is always on the optical axis whatever size the stylesheet
+// (or a media query) gives it
+const scopeEl = document.getElementById('scopeView');
 
 function selectScope(i) {
   if (scopeSel !== i && !sightState(i)?.ok) return;
@@ -574,8 +577,8 @@ function renderScopeInset() {
   if (dist < 0.5) return;
   scopeCamera.position.set(t.position.x, sightY, t.position.z);
   scopeCamera.lookAt(st.position.x, sightY, st.position.z);
-  // frame ~0.28 m of staff whatever the distance — with the 420 px inset
-  // that is ~1.5 px/mm, enough to estimate readings to the millimetre
+  // frame ~0.28 m of staff whatever the distance — with a 380 px inset
+  // that is ~1.4 px/mm, enough to estimate readings to the millimetre
   scopeCamera.fov = THREE.MathUtils.clamp(2 * Math.atan(0.14 / dist) * 180 / Math.PI, 0.2, 25);
   scopeCamera.updateProjectionMatrix();
   // the sight marker/line would cover the reading — hide during this pass
@@ -583,11 +586,14 @@ function renderScopeInset() {
   const mvis = sightMarks.map(m => m.visible);
   sightLines.forEach(l => l.visible = false);
   sightMarks.forEach(m => m.visible = false);
-  const gx = viewport.clientWidth - SCOPE_SIZE - SCOPE_RIGHT;
-  const gy = viewport.clientHeight - SCOPE_TOP - SCOPE_SIZE;
+  const box = scopeEl.getBoundingClientRect();
+  const vbox = viewport.getBoundingClientRect();
+  const size = Math.round(box.width);
+  const gx = Math.round(box.left - vbox.left);
+  const gy = Math.round(vbox.bottom - box.bottom);   // GL origin is bottom-left
   renderer.clearDepth();
-  renderer.setScissor(gx, gy, SCOPE_SIZE, SCOPE_SIZE);
-  renderer.setViewport(gx, gy, SCOPE_SIZE, SCOPE_SIZE);
+  renderer.setScissor(gx, gy, size, size);
+  renderer.setViewport(gx, gy, size, size);
   renderer.setScissorTest(true);
   renderer.render(scene, scopeCamera);
   renderer.setScissorTest(false);
