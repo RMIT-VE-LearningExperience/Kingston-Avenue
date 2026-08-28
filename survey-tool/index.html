@@ -358,6 +358,54 @@
       var active = document.querySelector('.staff-read.active');
       if (active) active.click();
     });
+    // instant tooltips: one shared element, delegated so dynamically built rows
+    // work too; the native title is moved to data-tip on first hover so the slow
+    // browser tooltip never shows
+    var tip = document.createElement('div');
+    tip.id = 'tip'; tip.setAttribute('role', 'tooltip'); tip.hidden = true;
+    document.body.appendChild(tip);
+    var tipFor = null;
+    function tipText(el) {
+      if (el.hasAttribute('title')) { el.setAttribute('data-tip', el.getAttribute('title')); el.removeAttribute('title'); }
+      return el.getAttribute('data-tip');
+    }
+    function showTip(el) {
+      var text = tipText(el);
+      if (!text) return;
+      tipFor = el;
+      tip.textContent = text;
+      tip.hidden = false;
+      var r = el.getBoundingClientRect(), gap = 8;
+      var tw = tip.offsetWidth, th = tip.offsetHeight;
+      var left = r.left + r.width / 2 - tw / 2;
+      left = Math.max(6, Math.min(left, window.innerWidth - tw - 6));
+      var top = r.bottom + gap;
+      var above = false;
+      if (top + th > window.innerHeight - 6) { top = r.top - th - gap; above = true; }
+      // elements hugging the right edge (the tool stack) get the tip on their left
+      if (r.right > window.innerWidth - 60 && r.width < 60 && !narrow()) {
+        left = r.left - tw - gap; top = r.top + r.height / 2 - th / 2; above = false;
+        tip.classList.add('side');
+      } else tip.classList.remove('side');
+      tip.classList.toggle('above', above);
+      tip.style.left = left + 'px';
+      tip.style.top = Math.max(6, top) + 'px';
+    }
+    function hideTip() { tipFor = null; tip.hidden = true; }
+    document.addEventListener('pointerover', function (e) {
+      if (e.pointerType === 'touch') return;
+      var el = e.target.closest('[title], [data-tip]');
+      if (!el) { if (tipFor) hideTip(); return; }
+      if (el !== tipFor) showTip(el);
+    });
+    document.addEventListener('pointerout', function (e) {
+      if (tipFor && !tipFor.contains(e.relatedTarget)) hideTip();
+    });
+    document.addEventListener('focusin', function (e) { var el = e.target.closest('[title], [data-tip]'); if (el) showTip(el); });
+    document.addEventListener('focusout', hideTip);
+    document.addEventListener('pointerdown', hideTip, true);
+    document.addEventListener('scroll', hideTip, true);
+    window.addEventListener('resize', hideTip);
     var wasNarrow = narrow();
     setOpen(true);
     window.addEventListener('resize', function () {
