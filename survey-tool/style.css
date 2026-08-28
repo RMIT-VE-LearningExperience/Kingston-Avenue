@@ -1069,6 +1069,7 @@ button.active {
 
 /* ---- sidebar drawer ---- */
 #app { position: relative; }
+#viewport { min-width: 0; overflow: hidden; }  /* flex item: let it shrink below the canvas size */
 #panel {
   position: relative;
   z-index: 20;
