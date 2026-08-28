@@ -77,3 +77,14 @@ Observed on a 1440×900 desktop viewport, default load and with level plane + gi
 - Verify visually: serve from repo root (`python3 -m http.server 8777`), open
   `http://localhost:8777/survey-tool/`, check both the default load and the "everything on" state
   (level plane + gizmo + all staffs) at ~1440×900 and a phone-width layout.
+
+## Sidebar drawer
+
+The panel is a drawer (inline script at the end of `index.html`, CSS under "sidebar drawer";
+no `main.js` dependency). ≤ 900 px viewport (e.g. the Canvas SCORM player) it is closed by default
+and slides over the viewport with a scrim; wider it is docked and collapsible (`body.panel-closed`
+pulls it out of the flow so the canvas gets the full width). `#panelToggle` (hamburger, top-left,
+hidden while open) opens, `#panelClose` in the header / scrim / Esc close. On narrow screens,
+pressing Move level, a scope button or Measure Start auto-closes the drawer; the help tour opens
+it while running and restores it afterwards. `#levelReadout` is offset to `left: 58px` to clear
+the toggle. Resize events are re-dispatched during the slide so the WebGL canvas tracks the width.

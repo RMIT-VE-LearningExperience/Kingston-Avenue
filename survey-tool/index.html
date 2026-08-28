@@ -24,7 +24,7 @@
           <span class="eyebrow">Kingston excavation</span>
           <h1>Survey Tool V2</h1>
         </div>
-        <span class="panel-status"><i></i>NGL</span>
+        <button id="panelClose" class="panel-close" type="button" aria-label="Hide panel" title="Hide panel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
       </header>
 
       <nav class="mode-tabs" aria-label="Tool mode">
@@ -136,8 +136,10 @@
       <p class="hint">Drag to orbit · scroll or +/- to zoom · right-drag to pan</p>
     </aside>
 
+    <div id="panelScrim" aria-hidden="true"></div>
     <main id="viewport">
       <div id="loading">Loading model…</div>
+      <button id="panelToggle" class="round-tool drawer-toggle" type="button" aria-label="Show panel" title="Show panel" aria-controls="panel" aria-expanded="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
       <div id="viewControls" aria-label="View controls">
         <div class="view-tool-stack">
           <button id="zoomInBtn" class="round-tool" aria-label="Zoom in" title="Zoom in">
@@ -223,6 +225,57 @@
     </section>
   </div>
 
+  <script>
+  // Sidebar drawer: docked on wide screens (collapsible), slide-over drawer on
+  // narrow ones (e.g. the Canvas SCORM player). No dependency on main.js.
+  (function () {
+    var NARROW = 900;
+    var body = document.body;
+    var toggle = document.getElementById('panelToggle');
+    var close = document.getElementById('panelClose');
+    var scrim = document.getElementById('panelScrim');
+    var narrow = function () { return window.innerWidth <= NARROW; };
+    var isOpen = function () { return !body.classList.contains('panel-closed'); };
+    var touched = false;
+    // main.js only resizes the canvas on window "resize"; fire it through the
+    // slide so the viewport never shows a stale frame
+    function kickResize() {
+      var t0 = performance.now();
+      (function tick() {
+        window.dispatchEvent(new Event('resize'));
+        if (performance.now() - t0 < 320) requestAnimationFrame(tick);
+      })();
+    }
+    function setOpen(open) {
+      body.classList.toggle('panel-closed', !open);
+      toggle.setAttribute('aria-expanded', String(open));
+      kickResize();
+    }
+    toggle.addEventListener('click', function () { touched = true; setOpen(true); });
+    close.addEventListener('click', function () { touched = true; setOpen(false); });
+    scrim.addEventListener('click', function () { setOpen(false); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && narrow() && isOpen()) setOpen(false); });
+    // on a narrow screen, starting a viewport interaction from the panel closes it
+    document.getElementById('panel').addEventListener('click', function (e) {
+      if (!narrow()) return;
+      var b = e.target.closest('#tripodGizmoToggle, .staff-read:not(:disabled), #measureStart');
+      if (b) setTimeout(function () { setOpen(false); }, 120);
+    });
+    // the help tour spotlights panel controls — make sure they are on screen
+    var tour = document.getElementById('onboarding');
+    var openedForTour = false;
+    if (tour) new MutationObserver(function () {
+      if (!tour.hidden && !isOpen()) { openedForTour = true; setOpen(true); }
+      else if (tour.hidden && openedForTour) { openedForTour = false; if (narrow()) setOpen(false); }
+    }).observe(tour, { attributes: true, attributeFilter: ['hidden'] });
+    var wasNarrow = narrow();
+    setOpen(!wasNarrow);
+    window.addEventListener('resize', function () {
+      var n = narrow();
+      if (n !== wasNarrow) { wasNarrow = n; if (!touched || n) setOpen(!n); }
+    });
+  })();
+  </script>
   <script type="module" src="main.js"></script>
 </body>
 </html>
