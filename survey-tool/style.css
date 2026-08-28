@@ -1093,7 +1093,7 @@ button.active {
 #panel {
   position: relative;
   z-index: 20;
-  transition: transform 0.24s ease, margin-left 0.24s ease;
+  transition: transform 0.24s ease, margin-left 0.24s ease, height 0.24s ease;
 }
 body.panel-closed #panel { margin-left: -324px; }   /* docked: collapse out of the flow */
 .panel-close {
@@ -1107,23 +1107,54 @@ body.panel-closed #panel { margin-left: -324px; }   /* docked: collapse out of t
 .drawer-toggle svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 body:not(.panel-closed) .drawer-toggle { display: none; }
 #levelReadout { left: 58px; }
-#panelScrim {
-  display: none; position: absolute; inset: 0; z-index: 19;
-  background: rgba(0, 0, 0, 0.45);
-}
+#panelScrim { display: none; }
+.panel-handle { display: none; }
+
+/* narrow screens (Canvas player, tablets, phones): bottom sheet so the panel
+   and the model are visible together; collapses to a status bar */
 @media (max-width: 900px) {
-  #app { flex-direction: row; }
-  #viewport { order: 0; min-height: 0; }
+  #app { flex-direction: column; }
+  #viewport { order: 0; flex: 1 1 auto; min-height: 0; }
   #panel {
-    position: absolute; top: 0; bottom: 0; left: 0; order: 0;
-    width: min(324px, 88vw); max-height: none;
-    margin-left: 0 !important;
-    border-right: 1px solid var(--border); border-top: 0;
-    box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
-    padding-bottom: calc(14px + env(safe-area-inset-bottom));
+    order: 1; width: 100%;
+    height: 46svh; max-height: none;
+    margin-left: 0 !important; transform: none;
+    padding: 46px 14px calc(12px + env(safe-area-inset-bottom));
+    border-right: 0; border-top: 1px solid var(--border);
+    box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.35);
   }
-  body.panel-closed #panel { transform: translateX(-100%); box-shadow: none; }
-  body:not(.panel-closed) #panelScrim { display: block; }
+  body.panel-closed #panel { height: 44px; overflow: hidden; padding-bottom: 0; }
+  .drawer-toggle, .panel-close { display: none !important; }
+  #levelReadout { left: 16px; }
+  .panel-handle {
+    position: absolute; top: 0; left: 0; right: 0; height: 44px;
+    display: flex; align-items: center; gap: 10px;
+    padding: 0 14px; border: 0; border-radius: 0; min-height: 0;
+    background: #282a2e; color: var(--text); font-size: 12px; font-weight: 650;
+    cursor: pointer; z-index: 2;
+  }
+  .panel-handle:hover { background: #2e3035; border-color: transparent; }
+  .panel-handle .grabber {
+    position: absolute; top: 5px; left: 50%; transform: translateX(-50%);
+    width: 36px; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.22);
+  }
+  .panel-handle .handle-status { margin-left: auto; color: #f3c64e; font-weight: 600; }
+  .panel-handle .chev { width: 18px; height: 18px; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform 0.2s; transform: rotate(180deg); }
+  body.panel-closed .panel-handle .chev { transform: rotate(0deg); }
+  .panel-handle .handle-label { padding-top: 6px; }
+  .panel-handle .handle-status { padding-top: 6px; }
+  #panel .panel-header { padding-top: 0; }
+  #scopeView { top: 12px; right: 12px; }
+  #panel .panel-header { display: none; }          /* the handle carries the title */
+  /* tool stack becomes a row along the bottom edge of the 3D view */
+  #viewControls { top: auto; right: auto; left: 0; bottom: 0; width: 100%; height: 52px; }
+  .view-tool-stack {
+    top: auto; right: auto; left: 10px; bottom: 9px;
+    display: flex; flex-direction: row; gap: 6px; max-width: calc(100% - 20px); flex-wrap: wrap;
+  }
+}
+@media (max-height: 560px) and (max-width: 900px) {
+  #panel { height: 52svh; }
 }
 
 /* ---- credit line ---- */

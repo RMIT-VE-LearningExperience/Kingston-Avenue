@@ -19,6 +19,12 @@
 <body>
   <div id="app">
     <aside id="panel">
+      <button id="panelHandle" class="panel-handle" type="button" aria-controls="panel" aria-expanded="true" title="Show or hide the survey tools">
+        <i class="grabber" aria-hidden="true"></i>
+        <span class="handle-label">Survey tools</span>
+        <span id="handleStatus" class="handle-status"></span>
+        <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg>
+      </button>
       <header class="panel-header">
         <div>
           <span class="eyebrow">Kingston excavation</span>
@@ -263,9 +269,20 @@
     function setOpen(open) {
       body.classList.toggle('panel-closed', !open);
       toggle.setAttribute('aria-expanded', String(open));
+      document.getElementById('panelHandle').setAttribute('aria-expanded', String(open));
       kickResize();
     }
     toggle.addEventListener('click', function () { touched = true; setOpen(true); });
+    var handle = document.getElementById('panelHandle');
+    handle.addEventListener('click', function () { touched = true; setOpen(!isOpen()); });
+    // the collapsed sheet shows the live readable-count so the exercise state is never hidden
+    var status = document.getElementById('staffStatus');
+    var handleStatus = document.getElementById('handleStatus');
+    if (status && handleStatus) {
+      var mirror = function () { handleStatus.textContent = (status.textContent.split('—')[0] || '').trim(); };
+      new MutationObserver(mirror).observe(status, { childList: true, characterData: true, subtree: true });
+      mirror();
+    }
     close.addEventListener('click', function () { touched = true; setOpen(false); });
     scrim.addEventListener('click', function () { setOpen(false); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && narrow() && isOpen()) setOpen(false); });
@@ -280,7 +297,7 @@
     var openedForTour = false;
     if (tour) new MutationObserver(function () {
       if (!tour.hidden && !isOpen()) { openedForTour = true; setOpen(true); }
-      else if (tour.hidden && openedForTour) { openedForTour = false; if (narrow()) setOpen(false); }
+      else if (tour.hidden && openedForTour) { openedForTour = false; }
     }).observe(tour, { attributes: true, attributeFilter: ['hidden'] });
     // full screen (works inside the Canvas LTI iframe, which allows fullscreen)
     var fs = document.getElementById('fullscreenToggle');
@@ -333,10 +350,10 @@
       window.addEventListener('resize', clampScope);
     }
     var wasNarrow = narrow();
-    setOpen(!wasNarrow);
+    setOpen(true);
     window.addEventListener('resize', function () {
       var n = narrow();
-      if (n !== wasNarrow) { wasNarrow = n; if (!touched || n) setOpen(!n); }
+      if (n !== wasNarrow) { wasNarrow = n; if (!touched) setOpen(true); }
     });
   })();
   </script>

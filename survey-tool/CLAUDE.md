@@ -78,16 +78,24 @@ Observed on a 1440×900 desktop viewport, default load and with level plane + gi
   `http://localhost:8777/survey-tool/`, check both the default load and the "everything on" state
   (level plane + gizmo + all staffs) at ~1440×900 and a phone-width layout.
 
-## Sidebar drawer
+## Sidebar drawer / bottom sheet
 
-The panel is a drawer (inline script at the end of `index.html`, CSS under "sidebar drawer";
-no `main.js` dependency). ≤ 900 px viewport (e.g. the Canvas SCORM player) it is closed by default
-and slides over the viewport with a scrim; wider it is docked and collapsible (`body.panel-closed`
-pulls it out of the flow so the canvas gets the full width). `#panelToggle` (hamburger, top-left,
-hidden while open) opens, `#panelClose` in the header / scrim / Esc close. On narrow screens,
-pressing Move level, a scope button or Measure Start auto-closes the drawer; the help tour opens
-it while running and restores it afterwards. `#levelReadout` is offset to `left: 58px` to clear
-the toggle. Resize events are re-dispatched during the slide so the WebGL canvas tracks the width.
+Layout logic is an inline script at the end of `index.html` plus the "sidebar drawer" CSS; no
+`main.js` dependency. Two modes, split at 900 px viewport width:
+
+- **Wide**: docked sidebar, collapsible. `body.panel-closed` pulls it out of the flow so the canvas
+  gets the full width; `#panelToggle` (hamburger, top-left, hidden while open) opens, `#panelClose`
+  in the header closes.
+- **Narrow** (Canvas SCORM player, tablets, phones): the panel becomes a **bottom sheet**
+  (46 svh, open by default) so the readings and the model are visible together — the panel is a
+  live readout, not navigation, so a hidden drawer defeats the exercise. `#panelHandle` (grab bar
+  with the live "N of 8 readable" mirrored from `#staffStatus`) collapses it to a 44 px status bar.
+  The viewport tool stack becomes a row along the bottom edge of the 3D view and the panel header
+  is hidden (the handle carries the title). Pressing Move level, a scope button or Measure Start
+  auto-collapses the sheet; the help tour expands it while running.
+
+Resize events are re-dispatched during the transition so the WebGL canvas tracks the size.
+`#levelReadout` sits at `left: 58px` on wide screens to clear the hamburger.
 
 ## Full screen (Canvas)
 
