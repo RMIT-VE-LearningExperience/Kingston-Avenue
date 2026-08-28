@@ -1376,7 +1376,8 @@ document.getElementById('tripodGizmoToggle').addEventListener('click', () => {
   if (tripodGizmoActive) autoRotateCamera = false;
   const btn = document.getElementById('tripodGizmoToggle');
   btn.classList.toggle('active', tripodGizmoActive);
-  btn.textContent = tripodGizmoActive ? 'Disable Move/Rotate' : 'Enable Move/Rotate';
+  btn.textContent = tripodGizmoActive ? 'Done' : 'Move level';
+  document.querySelector('.movement-tools').hidden = !tripodGizmoActive;
   // make sure the tripod is loaded + visible, placed on the terrain the first time
   if (tripodGizmoActive) {
     const cb = document.querySelector('.overlay-row[data-file="' + TRIPOD_FILE + '"] input');

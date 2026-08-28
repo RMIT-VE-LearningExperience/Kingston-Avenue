@@ -839,7 +839,20 @@ button.active {
   grid-template-columns: 1fr 1fr;
   gap: 6px;
   margin-bottom: 12px;
+  padding: 6px;
+  border-radius: 8px;
+  background: rgba(0,0,0,0.14);
 }
+.movement-tools[hidden] { display: none; }
+.movement-label {
+  grid-column: 1 / -1;
+  padding: 2px 4px 0;
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+.movement-tools button { min-height: 30px; }
 
 .staff-summary {
   position: sticky;
