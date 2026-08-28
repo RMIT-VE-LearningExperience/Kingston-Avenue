@@ -88,3 +88,11 @@ hidden while open) opens, `#panelClose` in the header / scrim / Esc close. On na
 pressing Move level, a scope button or Measure Start auto-closes the drawer; the help tour opens
 it while running and restores it afterwards. `#levelReadout` is offset to `left: 58px` to clear
 the toggle. Resize events are re-dispatched during the slide so the WebGL canvas tracks the width.
+
+## Full screen (Canvas)
+
+Canvas launches SCORM in a fixed-size LTI iframe (~840 px wide) and gives no stable embed URL —
+neither can be changed from inside the package. `#fullscreenToggle` in the viewport tool stack
+(wired in the same inline script as the drawer) calls `requestFullscreen()` on the document; it is
+hidden unless `document.fullscreenEnabled` is true (Canvas's LTI iframes allow it). For a full-width
+non-tracked embed, iframe the GitHub Pages URL in a Canvas Page instead.
