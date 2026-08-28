@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Kingston Excavation - Survey Tool V2</title>
+  <title>Kingston Excavation - Survey Tool</title>
   <link rel="stylesheet" href="style.css?v=4" />
   <script type="importmap">
   {
@@ -22,7 +22,7 @@
       <header class="panel-header">
         <div>
           <span class="eyebrow">Kingston excavation</span>
-          <h1>Survey Tool V2</h1>
+          <h1>Survey Tool</h1>
         </div>
         <button id="panelClose" class="panel-close" type="button" aria-label="Hide panel" title="Hide panel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
       </header>
@@ -154,6 +154,15 @@
               <path d="M2.5 4v6h6" />
               <path d="M4.6 15a8.5 8.5 0 1 0 2-9.2L2.5 10" />
             </svg>
+          </button>
+          <button id="levelToolToggle" class="round-tool" aria-label="Show level plane" title="Show level plane">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.5 12 4l8 4.5-8 4.5z" /><path d="M4 15.5 12 20l8-4.5" /><path d="M4 12 12 16.5 20 12" /></svg>
+          </button>
+          <button id="boundaryToolToggle" class="round-tool" aria-label="Show title boundary" title="Show title boundary (on the level plane)">
+            <svg viewBox="0 0 24 24" aria-hidden="true" stroke-dasharray="3 2.4"><path d="M4 5.5 12.5 4 20 8.5 18 19.5 5.5 20z" /></svg>
+          </button>
+          <button id="gridToolToggle" class="round-tool" aria-label="Show setout grid" title="Show setout grid (on the level plane)">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h18M3 15h18M9 3v18M15 3v18" /></svg>
           </button>
           <button id="fullscreenToggle" class="round-tool" aria-label="Enter full screen" title="Full screen" hidden>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg>

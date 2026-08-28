@@ -5,6 +5,9 @@ import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
 import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
+import { Line2 } from 'three/addons/lines/Line2.js';
+import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
+import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 
 // ---- eye icons (open = visible, closed = hidden) ----
 const EYE_OPEN = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
@@ -412,12 +415,15 @@ function ensureStaffs() {
 // dashed horizontal sight line from the instrument to each staff, with a
 // marker where it crosses the staff (= the reading)
 const sightLines = [], sightMarks = [];
+const SIGHT_LINE_PX = 3;   // sight line width in CSS pixels
 for (let i = 0; i < STAFF_COUNT; i++) {
-  const line = new THREE.Line(
-    new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
-    new THREE.LineDashedMaterial({ color: 0xffcc44, dashSize: 0.35, gapSize: 0.2,
-                                   transparent: true, opacity: 0.9 })
-  );
+  // Line2 gives a real screen-space width (plain WebGL lines are always 1 px)
+  const lineGeo = new LineGeometry();
+  lineGeo.setPositions([0, 0, 0, 0, 0, 0]);
+  const line = new Line2(lineGeo, new LineMaterial({
+    color: 0xffcc44, linewidth: SIGHT_LINE_PX, dashed: true, dashSize: 0.35, gapSize: 0.2,
+    transparent: true, opacity: 0.9 }));
+  line.material.resolution.set(viewport.clientWidth, viewport.clientHeight);
   line.visible = false;
   vrWorld.add(line);
   sightLines.push(line);
@@ -470,9 +476,9 @@ function updateSightVisuals() {
     sightLines[i].visible = false;
     sightMarks[i].visible = false;
     if (st.ok) {
-      sightLines[i].geometry.setFromPoints([
-        new THREE.Vector3(st.t.position.x, st.sightY, st.t.position.z),
-        new THREE.Vector3(st.s.position.x, st.sightY, st.s.position.z)]);
+      sightLines[i].geometry.setPositions([
+        st.t.position.x, st.sightY, st.t.position.z,
+        st.s.position.x, st.sightY, st.s.position.z]);
       sightLines[i].computeLineDistances();
       sightLines[i].material.color.set(0xffcc44);
       sightLines[i].visible = true;
@@ -1485,6 +1491,10 @@ function syncReferenceVisibility() {
   gridGroup.visible = levelActive && gridActive;
   document.getElementById('boundaryToggle')?.classList.toggle('active', boundaryActive);
   document.getElementById('gridToggle')?.classList.toggle('active', gridActive);
+  const bIcon = document.getElementById('boundaryToolToggle');
+  const gIcon = document.getElementById('gridToolToggle');
+  if (bIcon) { bIcon.classList.toggle('active', boundaryActive); bIcon.title = bIcon.ariaLabel = (boundaryActive ? 'Hide' : 'Show') + ' title boundary'; }
+  if (gIcon) { gIcon.classList.toggle('active', gridActive); gIcon.title = gIcon.ariaLabel = (gridActive ? 'Hide' : 'Show') + ' setout grid'; }
 }
 
 function setLevelActive(on) {
@@ -1520,6 +1530,8 @@ document.getElementById('gridToggle')?.addEventListener('click', () => {
   if (gridActive && !levelActive) setLevelActive(true);
   syncReferenceVisibility();
 });
+document.getElementById('boundaryToolToggle')?.addEventListener('click', () => document.getElementById('boundaryToggle').click());
+document.getElementById('gridToolToggle')?.addEventListener('click', () => document.getElementById('gridToggle').click());
 document.getElementById('levelInput').addEventListener('input', () => {
   const v = parseFloat(document.getElementById('levelInput').value);
   if (!Number.isNaN(v)) { levelPlane.position.y = v; updateLevelReadout(); }
@@ -2118,6 +2130,7 @@ function resize() {
   renderer.setSize(w, h);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
+  sightLines.forEach(l => l.material.resolution.set(w, h));
 }
 window.addEventListener('resize', resize);
 resize();
