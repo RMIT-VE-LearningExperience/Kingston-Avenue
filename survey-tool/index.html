@@ -177,7 +177,7 @@
           </button>
         </div>
       </div>
-      <div id="scopeView" style="display:none" aria-hidden="true">
+      <div id="scopeView" style="display:none" aria-hidden="true" title="Drag to move the telescope view">
         <div class="scope-mask"></div>
         <div class="scope-ring"></div>
         <div class="scope-cross-h"></div>
@@ -298,6 +298,39 @@
         fs.setAttribute('aria-label', on ? 'Exit full screen' : 'Enter full screen');
         kickResize();
       });
+    }
+    // draggable telescope inset — the WebGL pass follows the box's live position
+    var scope = document.getElementById('scopeView');
+    var vpEl = document.getElementById('viewport');
+    if (scope) {
+      var drag = null;
+      var clampScope = function () {
+        if (!scope.style.left) return;
+        var w = vpEl.clientWidth, hgt = vpEl.clientHeight, s = scope.offsetWidth;
+        scope.style.left = Math.min(Math.max(parseFloat(scope.style.left), 0), Math.max(0, w - s)) + 'px';
+        scope.style.top = Math.min(Math.max(parseFloat(scope.style.top), 0), Math.max(0, hgt - s)) + 'px';
+      };
+      scope.addEventListener('pointerdown', function (e) {
+        if (e.button !== 0) return;
+        var r = scope.getBoundingClientRect(), v = vpEl.getBoundingClientRect();
+        drag = { dx: e.clientX - r.left, dy: e.clientY - r.top, vx: v.left, vy: v.top };
+        scope.style.right = 'auto';
+        scope.style.left = (r.left - v.left) + 'px';
+        scope.style.top = (r.top - v.top) + 'px';
+        scope.classList.add('dragging');
+        scope.setPointerCapture(e.pointerId);
+        e.preventDefault();
+      });
+      scope.addEventListener('pointermove', function (e) {
+        if (!drag) return;
+        scope.style.left = (e.clientX - drag.vx - drag.dx) + 'px';
+        scope.style.top = (e.clientY - drag.vy - drag.dy) + 'px';
+        clampScope();
+      });
+      var endDrag = function () { drag = null; scope.classList.remove('dragging'); };
+      scope.addEventListener('pointerup', endDrag);
+      scope.addEventListener('pointercancel', endDrag);
+      window.addEventListener('resize', clampScope);
     }
     var wasNarrow = narrow();
     setOpen(!wasNarrow);

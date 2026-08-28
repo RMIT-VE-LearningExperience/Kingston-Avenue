@@ -1130,3 +1130,8 @@ body:not(.panel-closed) .drawer-toggle { display: none; }
 .credit { margin-top: 6px; font-size: 11px; color: var(--muted); }
 .credit a { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; }
 .credit a:hover { color: var(--text); }
+
+/* ---- draggable scope inset ---- */
+#scopeView { pointer-events: auto; cursor: grab; touch-action: none; user-select: none; }
+#scopeView.dragging { cursor: grabbing; }
+#scopeView > * { pointer-events: none; }
