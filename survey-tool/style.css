@@ -1125,3 +1125,8 @@ body:not(.panel-closed) .drawer-toggle { display: none; }
   body.panel-closed #panel { transform: translateX(-100%); box-shadow: none; }
   body:not(.panel-closed) #panelScrim { display: block; }
 }
+
+/* ---- credit line ---- */
+.credit { margin-top: 6px; font-size: 11px; color: var(--muted); }
+.credit a { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; }
+.credit a:hover { color: var(--text); }
