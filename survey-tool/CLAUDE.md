@@ -91,8 +91,11 @@ Layout logic is an inline script at the end of `index.html` plus the "sidebar dr
   live readout, not navigation, so a hidden drawer defeats the exercise. `#panelHandle` (grab bar
   with the live "N of 8 readable" mirrored from `#staffStatus`) collapses it to a 44 px status bar.
   The viewport tool stack becomes a row along the bottom edge of the 3D view and the panel header
-  is hidden (the handle carries the title). Pressing Move level, a scope button or Measure Start
-  auto-collapses the sheet; the help tour expands it while running.
+  is hidden (the handle carries the title). Pressing Move level or Measure Start auto-collapses the sheet
+  (a scope read does not — the reading row is the scope's own control); the help tour expands it
+  while running. When collapsed the sheet's scroll is pinned to 0 (a focused button would otherwise
+  scroll the overflow-hidden sheet away from the grab bar). The scope inset has its own × button
+  (`#scopeClose`, exempt from the drag handler) that toggles the active reading off.
 
 Resize events are re-dispatched during the transition so the WebGL canvas tracks the size.
 `#levelReadout` sits at `left: 58px` on wide screens to clear the hamburger.

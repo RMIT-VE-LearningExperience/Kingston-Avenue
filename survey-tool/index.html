@@ -190,6 +190,7 @@
         <div class="scope-cross-v"></div>
         <div class="scope-stadia scope-stadia-t"></div>
         <div class="scope-stadia scope-stadia-b"></div>
+        <button id="scopeClose" class="scope-close" type="button" aria-label="Close telescope view" title="Close telescope view"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       </div>
       <div id="gizmoTooltip" class="viewport-tooltip" style="display:none"></div>
       <svg id="measureOverlay" style="display:none" aria-hidden="true">
@@ -266,8 +267,11 @@
         if (performance.now() - t0 < 320) requestAnimationFrame(tick);
       })();
     }
+    var panelEl = document.getElementById('panel');
+    panelEl.addEventListener('scroll', function () { if (!isOpen() && narrow() && panelEl.scrollTop) panelEl.scrollTop = 0; });
     function setOpen(open) {
       body.classList.toggle('panel-closed', !open);
+      if (!open) { if (document.activeElement && panelEl.contains(document.activeElement)) document.activeElement.blur(); panelEl.scrollTop = 0; }
       toggle.setAttribute('aria-expanded', String(open));
       document.getElementById('panelHandle').setAttribute('aria-expanded', String(open));
       kickResize();
@@ -289,7 +293,7 @@
     // on a narrow screen, starting a viewport interaction from the panel closes it
     document.getElementById('panel').addEventListener('click', function (e) {
       if (!narrow()) return;
-      var b = e.target.closest('#tripodGizmoToggle, .staff-read:not(:disabled), #measureStart');
+      var b = e.target.closest('#tripodGizmoToggle, #measureStart');
       if (b) setTimeout(function () { setOpen(false); }, 120);
     });
     // the help tour spotlights panel controls — make sure they are on screen
@@ -328,7 +332,7 @@
         scope.style.top = Math.min(Math.max(parseFloat(scope.style.top), 0), Math.max(0, hgt - s)) + 'px';
       };
       scope.addEventListener('pointerdown', function (e) {
-        if (e.button !== 0) return;
+        if (e.button !== 0 || e.target.closest('.scope-close')) return;
         var r = scope.getBoundingClientRect(), v = vpEl.getBoundingClientRect();
         drag = { dx: e.clientX - r.left, dy: e.clientY - r.top, vx: v.left, vy: v.top };
         scope.style.right = 'auto';
@@ -349,6 +353,11 @@
       scope.addEventListener('pointercancel', endDrag);
       window.addEventListener('resize', clampScope);
     }
+    document.getElementById('scopeClose').addEventListener('click', function (e) {
+      e.stopPropagation();
+      var active = document.querySelector('.staff-read.active');
+      if (active) active.click();
+    });
     var wasNarrow = narrow();
     setOpen(true);
     window.addEventListener('resize', function () {

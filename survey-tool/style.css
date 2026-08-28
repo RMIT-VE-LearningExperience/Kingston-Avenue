@@ -1166,3 +1166,14 @@ body:not(.panel-closed) .drawer-toggle { display: none; }
 #scopeView { pointer-events: auto; cursor: grab; touch-action: none; user-select: none; }
 #scopeView.dragging { cursor: grabbing; }
 #scopeView > * { pointer-events: none; }
+
+/* ---- scope close button ---- */
+#scopeView .scope-close {
+  position: absolute; top: 6%; right: 6%;
+  width: 30px; height: 30px; min-height: 30px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 999px; background: rgba(45,47,52,0.92); color: var(--muted);
+  pointer-events: auto; box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+#scopeView .scope-close:hover { color: var(--text); background: #3a3d43; border-color: transparent; }
+#scopeView .scope-close svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
