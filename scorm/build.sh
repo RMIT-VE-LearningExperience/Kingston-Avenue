@@ -21,7 +21,7 @@ cp "$ROOT/$SRC"/models/*.glb "$ROOT/$SRC/models/stages.json" "$STAGE/models/"
 cp "$ROOT/scorm/scorm-api.js" "$ROOT/scorm/imsmanifest.xml" "$STAGE/"
 
 # inject the SCORM wrapper ahead of the app module
-perl -0pi -e 's|(\s*)<script type="module" src="main.js"></script>|$1<script src="scorm-api.js"></script>$1<script type="module" src="main.js"></script>|' "$STAGE/index.html"
+perl -0pi -e 's|(\s*)(<script type="module" src="main.js[^"]*"></script>)|$1<script src="scorm-api.js"></script>$1$2|' "$STAGE/index.html"
 grep -q 'scorm-api.js' "$STAGE/index.html" || { echo "failed to inject scorm-api.js" >&2; exit 1; }
 
 # every packaged file must be listed in the manifest

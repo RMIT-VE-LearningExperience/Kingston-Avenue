@@ -852,7 +852,14 @@ button.active {
   letter-spacing: 0.6px;
   text-transform: uppercase;
 }
-.movement-tools button { min-height: 30px; }
+.movement-tools button {
+  min-height: 30px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+}
+.movement-tools button svg {
+  width: 14px; height: 14px; flex-shrink: 0;
+  fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
 
 .staff-summary {
   position: sticky;

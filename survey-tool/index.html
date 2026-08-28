@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Kingston Excavation - Survey Tool V2</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=4" />
   <script type="importmap">
   {
     "imports": {
@@ -28,9 +28,9 @@
       </header>
 
       <nav class="mode-tabs" aria-label="Tool mode">
-        <button class="mode-tab active" type="button" data-mode="survey">Survey</button>
-        <button class="mode-tab" type="button" data-mode="display">Display</button>
-        <button class="mode-tab" type="button" data-mode="measure">Measure</button>
+        <button class="mode-tab active" type="button" data-mode="survey" title="Place the dumpy level and read the staffs">Survey</button>
+        <button class="mode-tab" type="button" data-mode="display" title="Reference overlays, model layers and soil x-ray">Display</button>
+        <button class="mode-tab" type="button" data-mode="measure" title="Measure the distance between two points on the model">Measure</button>
       </nav>
 
       <section class="mode-panel active" data-mode-panel="survey">
@@ -39,20 +39,20 @@
             <span class="section-label">Current task</span>
             <h2>Read staff positions</h2>
           </div>
-          <button id="tripodGizmoToggle" class="primary-action">Move level</button>
+          <button id="tripodGizmoToggle" class="primary-action" title="Show a gizmo on the dumpy level so you can move or rotate it">Move level</button>
         </div>
 
         <div class="movement-tools" aria-label="Gizmo mode" hidden>
           <span class="movement-label">Drag the gizmo to</span>
-          <button id="tripodMove" type="button">Move</button>
-          <button id="tripodRotate" type="button">Rotate</button>
+          <button id="tripodMove" type="button" title="Drag the red/blue arrows to move the level across the site"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/></svg>Move</button>
+          <button id="tripodRotate" type="button" title="Drag the green ring to turn the level"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 4v6h-6"/><path d="M19.4 15a8.5 8.5 0 1 1-2-9.2l4.1 4.2"/></svg>Rotate</button>
         </div>
 
         <div id="staffStatus" class="staff-summary">Select one or more fixed staff positions.</div>
 
         <div class="staff-toolbar">
-          <button id="staffToggle" type="button">Show all</button>
-          <button id="staffHideAll" type="button">Hide all</button>
+          <button id="staffToggle" type="button" title="Show all eight staff positions">Show all</button>
+          <button id="staffHideAll" type="button" title="Hide all staffs">Hide all</button>
           <button id="staffHelp" type="button" title="E-staff notation: 10 = 1.000 m, 09 = 0.900 m">E-staff</button>
         </div>
 
@@ -63,9 +63,9 @@
         <div class="panel-section">
           <span class="section-label">Reference overlays</span>
           <div class="display-toggles">
-            <button id="levelToggle" type="button">Level plane</button>
-            <button id="boundaryToggle" type="button">Boundary</button>
-            <button id="gridToggle" type="button">Setout grid</button>
+            <button id="levelToggle" type="button" title="Show or hide a horizontal reference plane that you can set to any RL">Level plane</button>
+            <button id="boundaryToggle" type="button" title="Show or hide the title boundary (drawn on the level plane)">Boundary</button>
+            <button id="gridToggle" type="button" title="Show or hide the A.02 structural setout grid (drawn on the level plane)">Setout grid</button>
           </div>
         </div>
 
@@ -76,28 +76,28 @@
 
         <div class="panel-section">
           <label class="section-label">Context</label>
-          <label class="layer overlay-row" data-file="models/excavator.glb">
+          <label class="layer overlay-row" data-file="models/excavator.glb" title="Show or hide the excavator">
             <span class="swatch" style="background:#d9b53d"></span>
             <span class="name">Excavator</span>
             <span class="count">123</span>
             <span class="eye"></span>
             <input type="checkbox" />
           </label>
-          <label class="layer overlay-row" data-file="models/neighbour.glb">
+          <label class="layer overlay-row" data-file="models/neighbour.glb" title="Show or hide the neighbouring house and wall">
             <span class="swatch" style="background:#a8503c"></span>
             <span class="name">Neighbour + Wall</span>
             <span class="count">3</span>
             <span class="eye"></span>
             <input type="checkbox" />
           </label>
-          <label class="layer overlay-row" data-file="models/neighbour_left.glb">
+          <label class="layer overlay-row" data-file="models/neighbour_left.glb" title="Show or hide the left neighbour and fence">
             <span class="swatch" style="background:#6b8f3a"></span>
             <span class="name">Neighbour-Left + Fence</span>
             <span class="count">3</span>
             <span class="eye"></span>
             <input type="checkbox" />
           </label>
-          <label class="layer overlay-row" data-file="models/tripod.glb">
+          <label class="layer overlay-row" data-file="models/tripod.glb" title="Show or hide the dumpy level and tripod">
             <span class="swatch" style="background:#4ec9b0"></span>
             <span class="name">Dumpy Level + Tripod</span>
             <span class="count">1</span>
@@ -108,7 +108,7 @@
 
         <div class="panel-section">
           <label class="section-label" for="soilOpacity">Soil X-ray</label>
-          <input type="range" id="soilOpacity" min="0" max="100" value="100" />
+          <input type="range" id="soilOpacity" min="0" max="100" value="100" title="Fade the soil to see through the terrain" />
           <div class="rowval"><span>Transparent</span><span id="soilVal">100%</span></div>
         </div>
       </section>
@@ -128,9 +128,9 @@
             <span class="section-label">Distance tool</span>
             <h2>Measure two points</h2>
           </div>
-          <button id="measureStart" class="primary-action" type="button">Start</button>
+          <button id="measureStart" class="primary-action" type="button" title="Then click two points on the model to measure the distance">Start</button>
         </div>
-        <button id="measureClear" type="button">Clear measurement</button>
+        <button id="measureClear" type="button" title="Remove the current measurement">Clear measurement</button>
         <div id="measureStatus" class="tool-status">Click two points on the model</div>
       </section>
 
@@ -149,10 +149,10 @@
           <button id="zoomOutBtn" class="round-tool" aria-label="Zoom out" title="Zoom out">
             <span aria-hidden="true">−</span>
           </button>
-          <button id="resetBtn" class="round-tool" aria-label="Reset camera" title="Reset camera">
+          <button id="resetBtn" class="round-tool" aria-label="Reset view" title="Reset view">
             <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M12 5a7 7 0 1 1-6.1 3.57" />
-              <path d="M5.5 5.5v4h4" />
+              <path d="M2.5 4v6h6" />
+              <path d="M4.6 15a8.5 8.5 0 1 0 2-9.2L2.5 10" />
             </svg>
           </button>
           <button id="fullscreenToggle" class="round-tool" aria-label="Enter full screen" title="Full screen" hidden>
@@ -193,7 +193,7 @@
       <div id="levelReadout" style="display:none">
         <div class="gr-title">Level (m)</div>
         <div class="level-row">
-          <input type="number" id="levelInput" step="0.1" />
+          <input type="number" id="levelInput" step="0.1" title="Type the RL of the level plane" />
           <span id="levelValue">0.00 m</span>
         </div>
         <div class="gr-json">Type a level or drag the green handle</div>
@@ -220,10 +220,10 @@
       <h2 id="tourTitle"></h2>
       <p id="tourBody"></p>
       <div class="tour-actions">
-        <button id="tourSkip" type="button">Skip</button>
+        <button id="tourSkip" type="button" title="Close the walkthrough">Skip</button>
         <div class="tour-step-actions">
-          <button id="tourBack" type="button">Back</button>
-          <button id="tourNext" type="button">Next</button>
+          <button id="tourBack" type="button" title="Previous step">Back</button>
+          <button id="tourNext" type="button" title="Next step">Next</button>
         </div>
       </div>
     </section>
@@ -297,6 +297,6 @@
     });
   })();
   </script>
-  <script type="module" src="main.js"></script>
+  <script type="module" src="main.js?v=4"></script>
 </body>
 </html>

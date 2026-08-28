@@ -454,7 +454,7 @@ function updateSightVisuals() {
     const readButton = document.getElementById('staffScope' + i);
     if (!st) {
       sightLines[i].visible = sightMarks[i].visible = false;
-      if (readButton) readButton.disabled = true;
+      if (readButton) { readButton.disabled = true; readButton.title = 'Turn this staff on to read it'; }
       if (readingEl) {
         readingEl.textContent = 'Off';
         readingEl.className = 'staff-reading';
@@ -1377,6 +1377,7 @@ document.getElementById('tripodGizmoToggle').addEventListener('click', () => {
   const btn = document.getElementById('tripodGizmoToggle');
   btn.classList.toggle('active', tripodGizmoActive);
   btn.textContent = tripodGizmoActive ? 'Done' : 'Move level';
+  btn.title = tripodGizmoActive ? 'Hide the gizmo when the level is where you want it' : 'Show a gizmo on the dumpy level so you can move or rotate it';
   document.querySelector('.movement-tools').hidden = !tripodGizmoActive;
   // make sure the tripod is loaded + visible, placed on the terrain the first time
   if (tripodGizmoActive) {
@@ -1450,7 +1451,7 @@ function buildStaffControls() {
     row.className = 'staff-item';
     row.dataset.staffRow = i;
     row.innerHTML = `
-      <input class="staff-switch" id="staffVisible${i}" type="checkbox" aria-label="Show ${point.label}">
+      <input class="staff-switch" id="staffVisible${i}" type="checkbox" aria-label="Show ${point.label}" title="Show or hide the staff at ${point.label}">
       <label class="staff-name" for="staffVisible${i}">
         <b>${point.short}</b>
         <span>${point.label}</span>
@@ -1833,6 +1834,7 @@ function buildLayerPanel() {
     if (n === 0) return;  // skip empty categories
     const row = document.createElement('label');
     row.className = 'layer';
+    row.title = `Show or hide ${c.label}`;
     row.innerHTML = `
       <span class="swatch" style="background:${c.color}"></span>
       <span class="name">${c.label}</span>
