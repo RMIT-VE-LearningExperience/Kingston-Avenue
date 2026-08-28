@@ -1506,7 +1506,7 @@ function syncReferenceVisibility() {
 function setLevelActive(on) {
   levelActive = on;
   if (levelActive) { autoRotateCamera = false; sizeLevelPlane(); levelCtrl.attach(levelPlane); }
-  else { levelCtrl.detach(); }
+  else { levelCtrl.detach(); boundaryActive = false; gridActive = false; }   // they ride the plane
   levelPlane.visible = levelActive;
   levelCtrl.visible = levelActive;
   syncReferenceVisibility();
