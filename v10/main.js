@@ -18,12 +18,17 @@ const CATEGORIES = [
   { id: 'piers',          label: 'Bored Pier — SPW6 / CB3',        color: '#7a7066' },
   { id: 'spw_1',          label: 'SPW Pile Wall — SPW1 RL 6.50',   color: '#9aa6b2' },
   { id: 'spw_2',          label: 'SPW2 Pile Wall',                 color: '#8f9aa6' },
+  { id: 'cb_spw2',        label: 'CB1 Capping Beam — SPW2',        color: '#a9a9a3' },
   { id: 'spw_3',          label: 'SPW3 Pile Wall',                 color: '#848e99' },
+  { id: 'cb_spw3',        label: 'CB1 Capping Beam — SPW3',        color: '#a19f99' },
   { id: 'spw_4',          label: 'SPW4 Pile Wall',                 color: '#79828c' },
+  { id: 'cb_spw4',        label: 'CB2 Capping Beam — SPW4',        color: '#98968f' },
   { id: 'spw_5',          label: 'SPW Pile Wall — SPW5 / CB1 RL 4.70', color: '#6e767f' },
+  { id: 'cb_spw5',        label: 'CB1 Capping Beam — SPW5',        color: '#8f8d86' },
   { id: 'spw_wall',       label: 'SPW Pile Walls',                 color: '#808080' },
   { id: 'retaining_wall', label: 'RTW1(O) Retaining Walls',        color: '#8c8c8c' },
-  { id: 'capping_beam',   label: 'SPW2&3 Retention Walls',         color: '#9a9a96' },
+  { id: 'capping_beam',   label: 'Capping Beams (other)',          color: '#9a9a96' },
+  { id: 'edge_beam',      label: 'EB2 Edge Beam',                  color: '#a6a39c' },
   { id: 'slab',           label: 'Ground Slab',                    color: '#a0a09c' },
   { id: 'shotcrete_side', label: 'Shotcrete — Sides',              color: '#9a9088' },
   { id: 'shotcrete_back', label: 'Shotcrete — Back',               color: '#827a72' },
@@ -651,7 +656,7 @@ const hidden = {};        // cat -> bool (persist layer visibility across stages
 const STAGE_CATEGORY_EXCLUSIONS = {};
 
 // bump ASSET_V whenever model .glb files change, so browsers fetch the new ones
-const ASSET_V = 'v10-10';
+const ASSET_V = 'v10-11';
 const bust = (url) => url + (url.includes('?') ? '&' : '?') + 'v=' + ASSET_V;
 
 const loader = new GLTFLoader();
