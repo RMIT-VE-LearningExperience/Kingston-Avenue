@@ -66,8 +66,8 @@
     "id": "spw1",
     "label": "03 \u2014 SPW1",
     "file": "models/spw1.glb",
-    "meshes": 84,
-    "mb": 0.84,
+    "meshes": 83,
+    "mb": 0.83,
     "excavator": {
       "pos": [
         -8.22,
