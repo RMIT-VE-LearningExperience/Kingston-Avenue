@@ -651,7 +651,7 @@ const hidden = {};        // cat -> bool (persist layer visibility across stages
 const STAGE_CATEGORY_EXCLUSIONS = {};
 
 // bump ASSET_V whenever model .glb files change, so browsers fetch the new ones
-const ASSET_V = 'v10-6';
+const ASSET_V = 'v10-7';
 const bust = (url) => url + (url.includes('?') ? '&' : '?') + 'v=' + ASSET_V;
 
 const loader = new GLTFLoader();
@@ -662,6 +662,8 @@ const loadingEl = document.getElementById('loading');
 
 // ---- overlays (lazy-loaded once, persist across stages) ----
 const EXCAVATOR_FILE = 'models/excavator.glb';
+// overlay file -> manifest key holding its per-stage placement
+const EXCAVATOR_KEYS = { 'models/excavator.glb': 'excavator', 'models/excavator3t.glb': 'excavator3t' };
 const overlayRoots = {};   // file -> gltf scene
 const overlayOn = {};      // file -> user wants it on
 
@@ -821,18 +823,20 @@ window.addEventListener('keydown', (event) => {
 });
 
 // Position/orient/show the excavator for the current stage.
-// stage.excavator = { pos:[x,y,z], quat:[x,y,z,w] }, or null (stage has no excavator).
+// stage.excavator / stage.excavator3t = { pos:[x,y,z], quat:[x,y,z,w] }, or null (absent at that stage).
 function updateExcavatorForStage() {
-  const root = overlayRoots[EXCAVATOR_FILE];
-  if (!root) return;
-  const x = stagesList[stageIndex]?.excavator;
-  if (x && x.pos) {
-    root.position.set(x.pos[0], x.pos[1], x.pos[2]);
-    if (x.quat) root.quaternion.set(x.quat[0], x.quat[1], x.quat[2], x.quat[3]);
-    root.visible = !!overlayOn[EXCAVATOR_FILE];
-  } else {
-    root.visible = false;   // this stage has no excavator
-  }
+  Object.entries(EXCAVATOR_KEYS).forEach(([file, key]) => {
+    const root = overlayRoots[file];
+    if (!root) return;
+    const x = stagesList[stageIndex]?.[key];
+    if (x && x.pos) {
+      root.position.set(x.pos[0], x.pos[1], x.pos[2]);
+      if (x.quat) root.quaternion.set(x.quat[0], x.quat[1], x.quat[2], x.quat[3]);
+      root.visible = !!overlayOn[file];
+    } else {
+      root.visible = false;   // this stage has no such excavator
+    }
+  });
   refreshGizmoAttachment();
 }
 
@@ -917,11 +921,11 @@ document.querySelectorAll('.overlay-row').forEach(row => {
         overlayRoots[file] = g.scene;
         vrWorld.add(g.scene);
         loadingEl.style.display = 'none';
-        if (file === EXCAVATOR_FILE) updateExcavatorForStage();
+        if (file in EXCAVATOR_KEYS) updateExcavatorForStage();
       }, undefined, (err) => { loadingEl.textContent = 'Overlay failed: ' + err; });
     } else if (overlayRoots[file]) {
       overlayRoots[file].visible = on;
-      if (file === EXCAVATOR_FILE) updateExcavatorForStage();
+      if (file in EXCAVATOR_KEYS) updateExcavatorForStage();
     }
   });
 });
