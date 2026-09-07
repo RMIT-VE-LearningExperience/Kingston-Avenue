@@ -50,6 +50,20 @@ When a pile layer's checkbox is off, its bore holes are carved out of the terrai
 
 GitHub Pages — push to `main`, the site deploys automatically from the repo root at `https://rmit-ve-learningexperience.github.io/Kingston-Avenue/`.
 
+## v10/ (second copy of the main viewer, S02-corrected model)
+
+`v10/` is a standalone copy of the root viewer (own `index.html`/`main.js`/`style.css`/`models/`,
+served at `/v10/`) carrying the exports from `Kingston_v10.blend` (S02 elevations: floor RL 6.70,
+SPW1 6.50, SPW5 4.245, RTW1 4.695–6.50, slab 6.90, west strip at the survey spot levels). The root
+viewer still serves the June models — the two are deliberately separate URLs. Differences in
+`v10/main.js`: `PILE_CATS` covers every pile category (`piers`, `spw_1`…`spw_5`, `spw_wall`) and
+`holeCatsForStage()` carves any of them present in the loaded stage (no manifest-index gating);
+`ASSET_V = 'v10-1'`. `v10/models/stages.json` places the excavator per stage from the machines in
+the Blender stage collections (three.js pos = Blender (x, z, −y); quat = rotation about Y by the
+Blender Z angle; origin sits 0.10 m above the track bottom, so y = terrain + 0.10); stages 06/07
+have none. Re-export recipe: select each stage collection's meshes with a `cat` other than
+`excavator` (skip `WGT-*`), `export_scene.gltf(GLB, use_selection, export_extras, export_apply)`.
+
 ## survey-tool/
 
 As of 2026-08-27 `survey-tool/` holds the V2 mode-based redesign (Survey / Display / Measure tabs — see `survey-tool/CLAUDE.md`); the original UI lives unchanged in `survey-tool_old/`, and `survey-tool_v3/` is an alternative numbered-workflow redesign. All three share the logic below.
