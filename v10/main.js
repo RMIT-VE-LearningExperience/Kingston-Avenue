@@ -651,7 +651,7 @@ const hidden = {};        // cat -> bool (persist layer visibility across stages
 const STAGE_CATEGORY_EXCLUSIONS = {};
 
 // bump ASSET_V whenever model .glb files change, so browsers fetch the new ones
-const ASSET_V = 'v10-2';
+const ASSET_V = 'v10-3';
 const bust = (url) => url + (url.includes('?') ? '&' : '?') + 'v=' + ASSET_V;
 
 const loader = new GLTFLoader();
