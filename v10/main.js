@@ -202,7 +202,7 @@ function rotateMainCamera(dx, dy) {
 // ---- transform gizmo for manually placing the excavator ----
 const gizmo = new TransformControls(camera, renderer.domElement);
 gizmo.addEventListener('dragging-changed', (e) => { controls.enabled = !e.value; });
-gizmo.addEventListener('objectChange', () => updateGizmoReadout());
+gizmo.addEventListener('objectChange', () => { snapExcavatorToTerrain(); updateGizmoReadout(); });
 scene.add(gizmo);
 
 function updateGizmoReadout() {
@@ -211,11 +211,13 @@ function updateGizmoReadout() {
   const p = gizmo.object.position, q = gizmo.object.quaternion;
   const f = (n) => n.toFixed(3);
   const stageId = stagesList[stageIndex] ? stagesList[stageIndex].id : '?';
+  const key = EXCAVATOR_KEYS[gizmoTarget] || 'excavator';
+  box.querySelector('#grName').textContent = gizmoTarget === EXCAVATOR_FILE ? 'Excavator 323D' : 'Excavator 3 t';
   box.querySelector('#grPos').textContent = `[${f(p.x)}, ${f(p.y)}, ${f(p.z)}]`;
   box.querySelector('#grQuat').textContent = `[${f(q.x)}, ${f(q.y)}, ${f(q.z)}, ${f(q.w)}]`;
   box.querySelector('#grStage').textContent = stageId;
   box.querySelector('#grJson').textContent =
-    `"excavator": { "pos": [${f(p.x)}, ${f(p.y)}, ${f(p.z)}], "quat": [${f(q.x)}, ${f(q.y)}, ${f(q.z)}, ${f(q.w)}] }`;
+    `"${key}": { "pos": [${f(p.x)}, ${f(p.y)}, ${f(p.z)}], "quat": [${f(q.x)}, ${f(q.y)}, ${f(q.z)}, ${f(q.w)}] }`;
 }
 
 // ---- level reference plane (movable datum, vertical only) ----
@@ -656,7 +658,7 @@ const hidden = {};        // cat -> bool (persist layer visibility across stages
 const STAGE_CATEGORY_EXCLUSIONS = {};
 
 // bump ASSET_V whenever model .glb files change, so browsers fetch the new ones
-const ASSET_V = 'v10-12';
+const ASSET_V = 'v10-13';
 const bust = (url) => url + (url.includes('?') ? '&' : '?') + 'v=' + ASSET_V;
 
 const loader = new GLTFLoader();
@@ -673,7 +675,7 @@ const overlayRoots = {};   // file -> gltf scene
 const overlayOn = {};      // file -> user wants it on
 
 // ---- onboarding / help tour ----
-const TOUR_STORAGE_KEY = 'kingstonViewerOnboardingSeen';
+const TOUR_STORAGE_KEY = 'kingstonViewerOnboardingSeen_v10c';
 const tourEl = document.getElementById('onboarding');
 const tourSpotlight = document.getElementById('tourSpotlight');
 const tourCard = document.getElementById('tourCard');
@@ -690,24 +692,29 @@ const tourSteps = [
     body: 'Drag to orbit the excavation model, scroll to zoom, and right-drag to pan around the site.'
   },
   {
+    target: '#scrubber',
+    title: 'Stage timeline',
+    body: 'Step through the eight excavation stages, from natural ground to the slab. The model reloads to show the selected stage.'
+  },
+  {
     target: '#layers',
     title: 'Layers',
-    body: 'Turn construction elements on or off to isolate soil, walls, slabs, piers, and other model groups.'
+    body: 'Turn elements on or off: soil, each pile wall, the capping beam of each wall, retaining wall, shotcrete and slab. Switch a pile wall off and its bore holes stay visible in the ground.'
   },
   {
     target: '.overlay-row',
     title: 'Overlays',
-    body: 'Add contextual models such as the excavator, neighbouring house, retaining wall, or fence when needed.'
+    body: 'Add the 323D excavator, the 3-tonne mini excavator and the neighbouring properties. The machines move to where they work in each stage.'
   },
   {
-    target: '#scrubber',
-    title: 'Stage timeline',
-    body: 'Move through excavation stages with the timeline. The model reloads to show the selected stage.'
+    target: '#gizmoToggle',
+    title: 'Excavator placement',
+    body: 'Pick a machine, enable the gizmo, then drag it across the site or turn it with the ring. It always sits on the ground and follows the slope.'
   },
   {
     target: '#resetBtn',
     title: 'View controls',
-    body: 'Use zoom, reset, measure, level, and VR shortcuts from the floating toolbar beside the orientation cube.'
+    body: 'Zoom, reset the camera, measure, show the level plane, go full screen or reopen this help from the floating toolbar.'
   },
   {
     target: '#measureToggle',
@@ -717,12 +724,17 @@ const tourSteps = [
   {
     target: '#levelToolToggle',
     title: 'Level plane',
-    body: 'Show a movable level plane to read heights and inspect where the model intersects a selected level.'
+    body: 'Show a movable level plane to read reduced levels and see where the model meets a chosen RL.'
   },
   {
     target: '#soilOpacity',
     title: 'Soil X-ray',
-    body: 'Fade the soil layer to reveal retained structures and staged work hidden below the terrain.'
+    body: 'Fade the soil to reveal the piles, beams and shotcrete hidden below the terrain.'
+  },
+  {
+    target: '#fullscreenToggle',
+    title: 'Full screen',
+    body: 'Expand the viewer to fill the screen; press Esc or the same button to come back.'
   },
   {
     target: '#helpTourToggle',
@@ -730,6 +742,7 @@ const tourSteps = [
     body: 'Open this walkthrough again any time from the question-mark button.'
   }
 ];
+
 let tourIndex = 0;
 let tourOpen = false;
 
@@ -847,9 +860,59 @@ function updateExcavatorForStage() {
 
 // ---- excavator move gizmo wiring ----
 let gizmoActive = false;
+let gizmoTarget = EXCAVATOR_FILE;                 // which machine the gizmo drives
+// glb origin height above the track bottom: 323D has its origin 0.10 m up, the 3 t sits at 0
+const EXCAVATOR_ORIGIN_LIFT = { 'models/excavator.glb': 0.10, 'models/excavator3t.glb': 0.0 };
+const MAX_TILT = THREE.MathUtils.degToRad(30);
+const _up = new THREE.Vector3(0, 1, 0);
+const _snapRay = new THREE.Raycaster();
+
+// Every visible terrain surface (original soil or its carved copy).
+function terrainTargets() {
+  const t = [];
+  (groups.soil || []).forEach(m => { if (m.visible) t.push(m); });
+  soilSwaps.forEach(s => s.carved.forEach(m => { if (m.visible) t.push(m); }));
+  return t;
+}
+function yawOf(q) {
+  const v = new THREE.Vector3(1, 0, 0).applyQuaternion(q);
+  return Math.atan2(-v.z, v.x);
+}
+// Put the machine's tracks on the ground under its position and tilt it with the slope.
+function snapExcavatorToTerrain(file = gizmoTarget) {
+  const root = overlayRoots[file];
+  if (!root) return false;
+  const targets = terrainTargets();
+  if (!targets.length) return false;
+  _snapRay.set(new THREE.Vector3(root.position.x, 1000, root.position.z), new THREE.Vector3(0, -1, 0));
+  const hit = _snapRay.intersectObjects(targets, false)[0];
+  if (!hit) return false;
+  root.position.y = hit.point.y + (EXCAVATOR_ORIGIN_LIFT[file] || 0);
+  // surface normal in world space, tilt limited so batters don't flip the machine
+  let n = _up.clone();
+  if (hit.face) {
+    // normals need the normal matrix: the terrain meshes carry a non-uniform scale (~9, 1, 9)
+    n = hit.face.normal.clone().applyMatrix3(new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld)).normalize();
+    if (n.y < 0) n.negate();
+    const ang = n.angleTo(_up);
+    if (ang > MAX_TILT) n = _up.clone().lerp(n, MAX_TILT / ang).normalize();
+  }
+  const yaw = yawOf(root.quaternion);
+  const qYaw = new THREE.Quaternion().setFromAxisAngle(_up, yaw);
+  const qTilt = new THREE.Quaternion().setFromUnitVectors(_up, n);
+  root.quaternion.copy(qTilt.multiply(qYaw));
+  return true;
+}
 function refreshGizmoAttachment() {
-  const root = overlayRoots[EXCAVATOR_FILE];
+  const root = overlayRoots[gizmoTarget];
   const readout = document.getElementById('gizmoReadout');
+  if (gizmoActive && root && !root.visible && overlayOn[gizmoTarget] && !modelBounds.isEmpty()) {
+    // no placement for this machine in this stage yet: drop it at the middle of the site to start from
+    const c = modelBounds.getCenter(new THREE.Vector3());
+    root.position.set(c.x, c.y, c.z);
+    root.quaternion.identity();
+    if (snapExcavatorToTerrain(gizmoTarget)) root.visible = true;
+  }
   if (gizmoActive && root && root.visible) {
     gizmo.attach(root); gizmo.visible = true;
     readout.style.display = 'block'; updateGizmoReadout();
@@ -860,6 +923,10 @@ function refreshGizmoAttachment() {
 }
 function setGizmoMode(mode) {
   gizmo.setMode(mode);
+  // move only across the ground (height comes from the terrain); rotate only about the vertical
+  gizmo.showX = gizmo.showZ = true;
+  gizmo.showY = mode !== 'translate';
+  if (mode === 'rotate') { gizmo.showX = false; gizmo.showZ = false; gizmo.showY = true; }
   document.getElementById('gizmoMove').classList.toggle('active', mode === 'translate');
   document.getElementById('gizmoRotate').classList.toggle('active', mode === 'rotate');
 }
@@ -868,13 +935,24 @@ document.getElementById('gizmoToggle').addEventListener('click', () => {
   if (gizmoActive) autoRotateCamera = false;
   document.getElementById('gizmoToggle').classList.toggle('active', gizmoActive);
   document.getElementById('gizmoToggle').textContent = gizmoActive ? 'Disable Move Gizmo' : 'Enable Move Gizmo';
-  // make sure the excavator is loaded + visible
-  if (gizmoActive) {
-    const cb = document.querySelector('.overlay-row[data-file="' + EXCAVATOR_FILE + '"] input');
-    if (cb && !cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change')); }
-  }
+  // make sure the selected excavator is loaded + visible
+  if (gizmoActive) ensureOverlayOn(gizmoTarget);
   refreshGizmoAttachment();
 });
+function ensureOverlayOn(file) {
+  const cb = document.querySelector('.overlay-row[data-file="' + file + '"] input');
+  if (cb && !cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change')); }
+}
+function setGizmoTarget(file) {
+  gizmoTarget = file;
+  document.getElementById('gizmoTargetBig').classList.toggle('active', file === EXCAVATOR_FILE);
+  document.getElementById('gizmoTargetMini').classList.toggle('active', file !== EXCAVATOR_FILE);
+  if (gizmoActive) ensureOverlayOn(file);
+  refreshGizmoAttachment();
+}
+document.getElementById('gizmoTargetBig').addEventListener('click', () => setGizmoTarget('models/excavator.glb'));
+document.getElementById('gizmoTargetMini').addEventListener('click', () => setGizmoTarget('models/excavator3t.glb'));
+window.__kv = { snapExcavatorToTerrain, setGizmoTarget, terrainTargets, THREE, get target() { return overlayRoots[gizmoTarget]; } };
 document.getElementById('gizmoMove').addEventListener('click', () => setGizmoMode('translate'));
 document.getElementById('gizmoRotate').addEventListener('click', () => setGizmoMode('rotate'));
 setGizmoMode('translate');
@@ -1325,6 +1403,7 @@ const vrInputState = new Map();
 const vrStickMove = new THREE.Vector3();
 
 function updateVrButton(active) {
+  if (!vrToggle) return;
   vrToggle.classList.toggle('active', active);
   vrToggle.setAttribute('aria-label', active ? 'Exit VR' : 'Enter VR');
   vrToggle.title = active ? 'Exit VR' : 'Enter VR';
@@ -1424,6 +1503,7 @@ function updateVrControllerInput() {
 }
 
 async function setupVrSupport() {
+  if (!vrToggle) return;                       // VR entry removed from the v10 toolbar
   if (!('xr' in navigator)) {
     vrToggle.disabled = true;
     vrToggle.title = 'VR requires a WebXR browser on a headset';
@@ -1441,7 +1521,7 @@ async function setupVrSupport() {
 }
 
 async function startVrSession() {
-  if (!navigator.xr || vrToggle.disabled) return;
+  if (!vrToggle || !navigator.xr || vrToggle.disabled) return;
   stopAutoRotate();
   clearMeasurement(false);
   configureVrView();
@@ -1466,11 +1546,34 @@ async function startVrSession() {
   }
 }
 
-vrToggle.addEventListener('click', () => {
+if (vrToggle) vrToggle.addEventListener('click', () => {
   if (xrSession) xrSession.end();
   else startVrSession();
 });
 setupVrSupport();
+
+// ---- full screen ----
+const fsToggle = document.getElementById('fullscreenToggle');
+function fsElement() { return document.fullscreenElement || document.webkitFullscreenElement || null; }
+function updateFsButton() {
+  if (!fsToggle) return;
+  const on = !!fsElement();
+  fsToggle.classList.toggle('active', on);
+  fsToggle.setAttribute('aria-label', on ? 'Exit full screen' : 'Enter full screen');
+  fsToggle.title = on ? 'Exit full screen' : 'Full screen';
+}
+if (fsToggle) {
+  const root = document.documentElement;
+  const canFs = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
+  if (!canFs) { fsToggle.disabled = true; fsToggle.title = 'Full screen is not allowed here (embed needs allowfullscreen)'; }
+  fsToggle.addEventListener('click', () => {
+    if (fsElement()) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    else (root.requestFullscreen || root.webkitRequestFullscreen).call(root);
+  });
+  document.addEventListener('fullscreenchange', () => { updateFsButton(); resize(); });
+  document.addEventListener('webkitfullscreenchange', () => { updateFsButton(); resize(); });
+  updateFsButton();
+}
 
 // ---- resize + render loop ----
 function resize() {

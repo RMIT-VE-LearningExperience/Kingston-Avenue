@@ -59,13 +59,18 @@
         </label>
       </section>
 
-      <section hidden>
+      <section>
         <label class="section-label">Excavator Placement</label>
+        <div class="btnrow">
+          <button id="gizmoTargetBig" class="active" data-file="models/excavator.glb">323D</button>
+          <button id="gizmoTargetMini" data-file="models/excavator3t.glb">3 t</button>
+        </div>
         <button id="gizmoToggle" class="wide">Enable Move Gizmo</button>
         <div class="btnrow" style="margin-top:7px">
           <button id="gizmoMove">Move</button>
           <button id="gizmoRotate">Rotate</button>
         </div>
+        <div class="tool-status">Drag to move on the ground · rotate ring turns it · tracks follow the terrain</div>
       </section>
 
       <section>
@@ -122,11 +127,12 @@
               <path d="M4 12 12 16.5 20 12" />
             </svg>
           </button>
-          <button id="vrToggle" class="round-tool" aria-label="Enter VR" title="Enter VR">
+          <button id="fullscreenToggle" class="round-tool" aria-label="Enter full screen" title="Full screen">
             <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M5.5 8.5h13A2.5 2.5 0 0 1 21 11v4.5a2 2 0 0 1-2 2h-2.1a2.5 2.5 0 0 1-2.1-1.1l-.8-1.2a2.4 2.4 0 0 0-4 0l-.8 1.2a2.5 2.5 0 0 1-2.1 1.1H5a2 2 0 0 1-2-2V11a2.5 2.5 0 0 1 2.5-2.5z" />
-              <path d="M7.5 12.5h3" />
-              <path d="M13.5 12.5h3" />
+              <path d="M4 9V4h5" />
+              <path d="M20 9V4h-5" />
+              <path d="M4 15v5h5" />
+              <path d="M20 15v5h-5" />
             </svg>
           </button>
           <button id="helpTourToggle" class="round-tool" aria-label="Open help" title="Help">
@@ -161,8 +167,8 @@
         </div>
         <div class="gr-json">Type a level or drag the green handle</div>
       </div>
-      <div id="gizmoReadout" style="display:none" hidden>
-        <div class="gr-title">Excavator — stage <span id="grStage"></span></div>
+      <div id="gizmoReadout" style="display:none">
+        <div class="gr-title"><span id="grName">Excavator</span> — stage <span id="grStage"></span></div>
         <div>pos <span id="grPos"></span></div>
         <div>quat <span id="grQuat"></span></div>
         <div class="gr-json" id="grJson"></div>
