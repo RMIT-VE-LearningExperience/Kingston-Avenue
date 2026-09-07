@@ -651,7 +651,7 @@ const hidden = {};        // cat -> bool (persist layer visibility across stages
 const STAGE_CATEGORY_EXCLUSIONS = {};
 
 // bump ASSET_V whenever model .glb files change, so browsers fetch the new ones
-const ASSET_V = 'v10-7';
+const ASSET_V = 'v10-8';
 const bust = (url) => url + (url.includes('?') ? '&' : '?') + 'v=' + ASSET_V;
 
 const loader = new GLTFLoader();
@@ -953,7 +953,7 @@ const holeWallMat = new THREE.MeshStandardMaterial({ color: 0x2e2f32, roughness:
 const csgEvaluator = new Evaluator();
 const HOLE_MAX_FOOTPRINT = 1.0;  // meshes wider than this are caps/soil covers, not pile shafts
 const HOLE_CLUSTER_DIST = 0.45;  // merge duplicate/segmented meshes within this XZ distance
-const HOLE_RADIUS_SCALE = 1.03;  // slight oversize keeps the boolean numerically robust
+const HOLE_RADIUS_SCALE = 1.0;   // a hole is exactly the pile's footprint
 const HOLE_SEGMENTS = 24;
 
 // Every pile category leaves bore holes when its layer is switched off. A
@@ -1002,13 +1002,10 @@ function buildCutterGeometry(cats) {
   const down = new THREE.Vector3(0, -1, 0);
   const geos = [];
   cats.forEach(cat => (holeClusters[cat] || []).forEach(c => {
-    // carve from the terrain surface (or the pile top, whichever is higher)
-    // down to the pile toe, so buried pile tops still read as surface holes
-    let top = c.top;
-    raycaster.set(new THREE.Vector3(c.x, 1000, c.z), down);
-    const hit = raycaster.intersectObjects(groups.soil || [], false)[0];
-    if (hit && hit.point.y > top) top = hit.point.y;
-    top += 0.5;                      // overshoot above the surface for a clean cut
+    // carve exactly the pile: from its head down to its toe (2 cm above the
+    // head so a head flush with the surface still cuts cleanly). A head below
+    // the surface leaves a closed void, visible with the soil X-ray.
+    const top = c.top + 0.02;
     const h = top - c.bot;
     if (h <= 0) return;
     const g = new THREE.CylinderGeometry(c.r * HOLE_RADIUS_SCALE, c.r * HOLE_RADIUS_SCALE, h, HOLE_SEGMENTS);
