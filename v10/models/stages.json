@@ -45,8 +45,8 @@
     "id": "cb1_spw5_rtw1",
     "label": "02 \u2014 CB1 / SPW5 + RTW1",
     "file": "models/cb1_spw5_rtw1.glb",
-    "meshes": 54,
-    "mb": 0.65,
+    "meshes": 35,
+    "mb": 0.5,
     "excavator": {
       "pos": [
         -5.2,
